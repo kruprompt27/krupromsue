@@ -164,9 +164,10 @@ tailwind.config = {
     <section id="tab-subjects" class="tab-panel">
       <div class="card rounded-2xl p-5 mb-5">
         <h3 class="font-semibold text-brand-800 mb-3">➕ เพิ่มวิชาใหม่</h3>
-        <div class="grid sm:grid-cols-4 gap-3">
+        <div class="grid sm:grid-cols-5 gap-3">
           <input id="sjName"  placeholder="ชื่อวิชา *"  class="border border-slate-200 rounded-lg px-3 py-2 sm:col-span-2">
           <input id="sjLevel" placeholder="ระดับชั้น เช่น ป.1" class="border border-slate-200 rounded-lg px-3 py-2">
+          <input id="sjHours" placeholder="ชั่วโมง เช่น 160" class="border border-slate-200 rounded-lg px-3 py-2">
           <button onclick="addSubject()" class="bg-brand-600 hover:bg-brand-700 text-white rounded-lg px-4 py-2 font-medium">เพิ่มวิชา</button>
         </div>
         <input id="sjDesc" placeholder="คำอธิบาย (ไม่บังคับ)" class="border border-slate-200 rounded-lg px-3 py-2 w-full mt-3">
@@ -525,7 +526,7 @@ function renderCustomerContent(d){
     html += `<div class="card rounded-2xl mb-3 overflow-hidden">
       <button onclick="document.getElementById('${pid}').classList.toggle('hidden')" class="w-full flex items-center justify-between px-5 py-4 text-left">
         <span><span class="font-semibold text-brand-800">${esc(s.name)}</span>
-          ${s.level?`<span class="text-xs bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full ml-2">${esc(s.level)}</span>`:''}
+          ${s.level?`<span class="text-xs bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full ml-2">${esc(s.level)}${s.hours?' · '+esc(s.hours)+' ชม.':''}</span>`:''}
           <span class="block text-xs text-slate-400 mt-0.5">${s.plans.length} สื่อ</span></span>
         <span class="text-brand-400 text-xl">›</span>
       </button>
@@ -561,6 +562,9 @@ async function adminLogin(){
     $('view-customer').classList.add('hidden');
     $('view-admin').classList.remove('hidden');
     window.scrollTo(0,0);
+    // ซิงค์รายชื่อวิชาจากระบบขายอัตโนมัติเมื่อเข้าสู่ระบบ (ไม่บล็อกถ้าพลาด)
+    $('loadingMsg').textContent = 'กำลังซิงค์รายชื่อวิชา...';
+    try{ await gas('importSubjectsFromOrderCatalog', pin); }catch(_){}
     switchTab('subjects');
   }catch(e){ toast('ผิดพลาด: '+e.message,'error'); }
   finally{ hideLoading(); }
@@ -604,7 +608,7 @@ function renderSubjects(){
       <div class="flex items-start justify-between">
         <div>
           <div class="font-semibold text-brand-800">${esc(s.name)}</div>
-          <div class="text-xs text-slate-400">${esc(s.level||'-')}</div>
+          <div class="text-xs text-slate-400">${esc(s.level||'-')}${s.hours?' · '+esc(s.hours)+' ชม.':''}</div>
         </div>
         <span class="text-[10px] px-2 py-0.5 rounded-full ${s.status==='ปิด'?'bg-slate-100 text-slate-500':'bg-green-50 text-green-600'}">${esc(s.status||'เปิด')}</span>
       </div>
@@ -621,8 +625,8 @@ async function addSubject(){
   const name=$('sjName').value.trim(); if(!name){ toast('กรอกชื่อวิชา','warn'); return; }
   showLoading('กำลังบันทึก...');
   try{
-    const res = await gas('addSubject', ADMIN_PIN, {name, level:$('sjLevel').value.trim(), desc:$('sjDesc').value.trim()});
-    if(res.ok){ toast('เพิ่มวิชาแล้ว'); $('sjName').value=$('sjLevel').value=$('sjDesc').value=''; SUBJECTS_CACHE=[]; loadSubjects(); }
+    const res = await gas('addSubject', ADMIN_PIN, {name, level:$('sjLevel').value.trim(), hours:$('sjHours').value.trim(), desc:$('sjDesc').value.trim()});
+    if(res.ok){ toast('เพิ่มวิชาแล้ว'); $('sjName').value=$('sjLevel').value=$('sjHours').value=$('sjDesc').value=''; SUBJECTS_CACHE=[]; loadSubjects(); }
     else toast(res.error,'error');
   }catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
 }
@@ -631,6 +635,7 @@ function editSubject(s){
   $('editBody').innerHTML = `
     <input id="e_name"  value="${esc(s.name)}"  placeholder="ชื่อวิชา" class="w-full border border-slate-200 rounded-lg px-3 py-2">
     <input id="e_level" value="${esc(s.level||'')}" placeholder="ระดับชั้น" class="w-full border border-slate-200 rounded-lg px-3 py-2">
+    <input id="e_hours" value="${esc(s.hours||'')}" placeholder="เวลาเรียน (ชั่วโมง)" class="w-full border border-slate-200 rounded-lg px-3 py-2">
     <input id="e_desc"  value="${esc(s.desc||'')}"  placeholder="คำอธิบาย" class="w-full border border-slate-200 rounded-lg px-3 py-2">
     <select id="e_status" class="w-full border border-slate-200 rounded-lg px-3 py-2">
       <option ${s.status!=='ปิด'?'selected':''}>เปิด</option><option ${s.status==='ปิด'?'selected':''}>ปิด</option>
@@ -638,7 +643,7 @@ function editSubject(s){
   $('editSaveBtn').onclick = async ()=>{
     showLoading('กำลังบันทึก...');
     try{
-      const res = await gas('updateSubject', ADMIN_PIN, s.id, {name:$('e_name').value.trim(), level:$('e_level').value.trim(), desc:$('e_desc').value.trim(), status:$('e_status').value});
+      const res = await gas('updateSubject', ADMIN_PIN, s.id, {name:$('e_name').value.trim(), level:$('e_level').value.trim(), hours:$('e_hours').value.trim(), desc:$('e_desc').value.trim(), status:$('e_status').value});
       if(res.ok){ toast('บันทึกแล้ว'); closeModal('m-edit'); SUBJECTS_CACHE=[]; loadSubjects(); } else toast(res.error,'error');
     }catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
   };
