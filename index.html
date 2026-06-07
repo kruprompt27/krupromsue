@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<base target="_top">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ครูพร้อมสื่อ</title>
+
+<!-- ============================================================= -->
+<!-- 🔧 ตั้งค่า: วาง Web App URL ของคุณตรงนี้ (ส่วนบนสุดเพื่อแก้ง่าย) -->
+<!--    ได้จาก Apps Script → การทำให้ใช้งานได้ → เว็บแอป → คัดลอก URL  -->
+<!-- ============================================================= -->
+<script>
+  const API_URL = 'https://script.google.com/macros/s/AKfycbwQ1oJ7A0LFuKPvPvJCXv_uzS-6IGpDX0Nj2EZgc1QUXVkYEyVLicDUllRhC52A-nYgfQ/exec';
+</script>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Mitr:wght@400;500;600;700&family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['Sarabun', 'sans-serif'],
+        display: ['Mitr', 'sans-serif']
+      },
+      colors: {
+        brand:  { 50:'#eefdf6', 100:'#d6f7e6', 200:'#aeecd0', 300:'#76dbb4', 400:'#3cc191', 500:'#16a674', 600:'#0c855e', 700:'#0c6a4d', 800:'#0e543f', 900:'#0d4535' },
+        amber2: { 400:'#fbbf24', 500:'#f59e0b', 600:'#d97706' }
+      }
+    }
+  }
+}
+</script>
+
+<style>
+  body{ font-family:'Sarabun',sans-serif; background:#f4faf7;
+        background-image:radial-gradient(circle at 12% 8%, #d6f7e6 0, transparent 38%),
+                         radial-gradient(circle at 92% 0%, #fef3c7 0, transparent 30%); }
+  h1,h2,h3,.font-display{ font-family:'Mitr',sans-serif; }
+  .blink{ animation:blink 1.4s ease-in-out infinite; }
+  @keyframes blink{ 0%,100%{opacity:1} 50%{opacity:.25} }
+  .fade-up{ animation:fadeUp .45s ease both; }
+  @keyframes fadeUp{ from{opacity:0; transform:translateY(12px)} to{opacity:1; transform:translateY(0)} }
+  .spin{ animation:spin 1s linear infinite; } @keyframes spin{ to{transform:rotate(360deg)} }
+  .card{ background:#fff; border:1px solid #e6f1ec; box-shadow:0 6px 20px -10px rgba(13,69,53,.18); }
+  .tab-btn.active{ background:#0c855e; color:#fff; box-shadow:0 6px 14px -6px rgba(12,133,94,.6); }
+  input,select,textarea{ outline:none; }
+  input:focus,select:focus,textarea:focus{ border-color:#16a674; box-shadow:0 0 0 3px rgba(22,166,116,.15); }
+  ::-webkit-scrollbar{ height:8px; width:8px } ::-webkit-scrollbar-thumb{ background:#bfe6d5; border-radius:8px }
+</style>
+</head>
+
+<body class="text-slate-800 min-h-screen">
+
+<!-- ========== LOADING ========== -->
+<div id="loading" class="fixed inset-0 z-[90] hidden items-center justify-center bg-white/70 backdrop-blur-sm">
+  <div class="flex flex-col items-center gap-3">
+    <div class="spin w-12 h-12 rounded-full border-4 border-brand-200 border-t-brand-600"></div>
+    <p id="loadingMsg" class="text-brand-700 font-medium">กำลังโหลด...</p>
+  </div>
+</div>
+
+<!-- ========== TOAST ========== -->
+<div id="toast" class="fixed top-4 right-4 z-[100] flex flex-col gap-2"></div>
+
+<!-- ============================================================= -->
+<!-- ====================  หน้าจอลูกค้า  ========================== -->
+<!-- ============================================================= -->
+<div id="view-customer">
+  <header class="text-center pt-8 pb-5 px-4">
+    <div class="inline-flex items-center gap-2 justify-center">
+      <img id="custLogo" class="hidden h-11 w-11 rounded-full object-cover border border-brand-100">
+      <span id="custLogoFallback" class="text-3xl">📚</span>
+      <h1 id="custTitle" class="text-3xl sm:text-4xl font-bold text-brand-800">ครูพร้อมสื่อ</h1>
+    </div>
+    <p id="custSlogan" class="text-brand-600/80 mt-1 text-sm sm:text-base">สื่อการสอนพร้อมใช้ เข้าถึงได้ทุกที่ทุกอุปกรณ์</p>
+    <div class="mt-3 inline-flex items-center gap-2 text-xs bg-white/70 border border-brand-100 rounded-full px-3 py-1 text-brand-700">
+      <span id="connDot" class="w-2 h-2 rounded-full bg-slate-300"></span>
+      <span id="connText">☁️ กำลังเชื่อมต่อ Google Sheets...</span>
+    </div>
+  </header>
+
+  <!-- กล่องเข้าสู่ระบบด้วย Gmail -->
+  <main class="max-w-md mx-auto px-4 pb-16">
+    <section id="loginBox" class="card rounded-2xl p-6 sm:p-8 fade-up">
+      <h2 class="text-xl font-semibold text-brand-800 text-center">เข้าถึงสื่อการสอนของคุณ</h2>
+      <p class="text-center text-sm text-slate-500 mt-1">กรอกอีเมล (Gmail) ที่ใช้สั่งซื้อ</p>
+      <div class="mt-5 space-y-3">
+        <input id="custEmail" type="email" inputmode="email" placeholder="example@gmail.com"
+               class="w-full border border-slate-200 rounded-xl px-4 py-3 text-center text-lg"
+               onkeydown="if(event.key==='Enter')customerLogin()">
+        <button onclick="customerLogin()"
+                class="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 rounded-xl transition">
+          🔓 เข้าสู่สื่อของฉัน
+        </button>
+      </div>
+      <p class="text-xs text-slate-400 text-center mt-4">หากยังไม่มีสิทธิ์เข้าถึง กรุณาติดต่อเพจครูพร้อมสอน</p>
+    </section>
+
+    <!-- ผลลัพธ์หลังเข้าสู่ระบบ -->
+    <section id="contentBox" class="hidden"></section>
+  </main>
+
+  <!-- ปุ่มผู้ดูแล -->
+  <div class="text-center pb-8">
+    <button onclick="openAdminGate()" class="text-xs text-slate-400 hover:text-brand-600 underline">สำหรับผู้ดูแลระบบ</button>
+  </div>
+
+  <footer class="border-t border-brand-100 bg-white/60 py-4 px-4 text-center text-[11px] sm:text-xs text-slate-500 leading-relaxed">
+    Copyright © เพจครูพร้อมสอน. All Rights Reserved. สำหรับใช้ในโรงเรียนเท่านั้น
+    ไม่อนุญาตให้ดัดแปลง แก้ไข ทำซ้ำ เพื่อการพาณิชย์ หรือแอบอ้างเป็นผลงานของตนเอง
+  </footer>
+</div>
+
+<!-- ============================================================= -->
+<!-- ====================  หน้าจอผู้ดูแล  ========================= -->
+<!-- ============================================================= -->
+<div id="view-admin" class="hidden">
+  <!-- หัว + Action Bar -->
+  <header class="bg-white border-b border-brand-100 sticky top-0 z-40">
+    <div class="max-w-6xl mx-auto px-4 py-3">
+      <div class="flex items-center justify-between flex-wrap gap-3">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">🛠️</span>
+          <div>
+            <h1 class="text-lg font-bold text-brand-800 leading-none">ครูพร้อมสื่อ · ผู้ดูแล</h1>
+            <span class="text-xs text-brand-600 inline-flex items-center gap-1 mt-0.5">
+              <span class="w-2 h-2 rounded-full bg-green-500 blink"></span> เชื่อมต่อ Google Sheets (Online)
+            </span>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="doBackup()"  class="bg-green-600 hover:bg-green-700 text-white text-sm px-3 py-2 rounded-lg">💾 สำรอง</button>
+          <button onclick="$('importFile').click()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-2 rounded-lg">📥 นำเข้า</button>
+          <button onclick="openClearModal()" class="bg-red-600 hover:bg-red-700 text-white text-sm px-3 py-2 rounded-lg">🗑️ ล้างข้อมูล</button>
+          <button onclick="exitAdmin()" class="text-slate-500 hover:text-brand-700 text-sm px-2 py-2">↩ ออก</button>
+          <input id="importFile" type="file" accept=".json" class="hidden" onchange="doImport(this)">
+        </div>
+      </div>
+      <div class="mt-2 text-xs text-amber2-600 flex items-center gap-1">
+        💡 ข้อมูลถูกบันทึกบน Google Sheets ของคุณอัตโนมัติ ใช้งานได้จากทุกอุปกรณ์
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <nav class="max-w-6xl mx-auto px-4 pb-3 flex gap-2 overflow-x-auto">
+      <button class="tab-btn active whitespace-nowrap text-sm font-medium px-4 py-2 rounded-lg bg-brand-50 text-brand-700" data-tab="subjects" onclick="switchTab('subjects')">📚 จัดการวิชา</button>
+      <button class="tab-btn whitespace-nowrap text-sm font-medium px-4 py-2 rounded-lg bg-brand-50 text-brand-700" data-tab="plans"    onclick="switchTab('plans')">🎬 จัดการสื่อ</button>
+      <button class="tab-btn whitespace-nowrap text-sm font-medium px-4 py-2 rounded-lg bg-brand-50 text-brand-700" data-tab="access"   onclick="switchTab('access')">🔑 จัดการสิทธิ์</button>
+      <button class="tab-btn whitespace-nowrap text-sm font-medium px-4 py-2 rounded-lg bg-brand-50 text-brand-700" data-tab="report"   onclick="switchTab('report')">📊 รายงานสรุป</button>
+      <button class="tab-btn whitespace-nowrap text-sm font-medium px-4 py-2 rounded-lg bg-brand-50 text-brand-700" data-tab="settings" onclick="switchTab('settings')">⚙️ ตั้งค่าระบบ</button>
+      <button class="tab-btn whitespace-nowrap text-sm font-medium px-4 py-2 rounded-lg bg-brand-50 text-brand-700" data-tab="manual"   onclick="switchTab('manual')">📖 คู่มือ</button>
+    </nav>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 py-6">
+
+    <!-- ===== TAB: จัดการวิชา ===== -->
+    <section id="tab-subjects" class="tab-panel">
+      <div class="card rounded-2xl p-5 mb-5">
+        <h3 class="font-semibold text-brand-800 mb-3">➕ เพิ่มวิชาใหม่</h3>
+        <div class="grid sm:grid-cols-4 gap-3">
+          <input id="sjName"  placeholder="ชื่อวิชา *"  class="border border-slate-200 rounded-lg px-3 py-2 sm:col-span-2">
+          <input id="sjLevel" placeholder="ระดับชั้น เช่น ป.1" class="border border-slate-200 rounded-lg px-3 py-2">
+          <button onclick="addSubject()" class="bg-brand-600 hover:bg-brand-700 text-white rounded-lg px-4 py-2 font-medium">เพิ่มวิชา</button>
+        </div>
+        <input id="sjDesc" placeholder="คำอธิบาย (ไม่บังคับ)" class="border border-slate-200 rounded-lg px-3 py-2 w-full mt-3">
+      </div>
+      <div class="card rounded-2xl p-5">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold text-brand-800">รายการวิชาทั้งหมด</h3>
+          <input id="sjSearch" oninput="renderSubjects()" placeholder="🔍 ค้นหา..." class="border border-slate-200 rounded-lg px-3 py-1.5 text-sm w-44">
+        </div>
+        <div id="subjectList" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+      </div>
+    </section>
+
+    <!-- ===== TAB: จัดการสื่อ (แผน) ===== -->
+    <section id="tab-plans" class="tab-panel hidden">
+      <div class="card rounded-2xl p-5 mb-5">
+        <div class="flex flex-wrap items-center gap-3 mb-4">
+          <label class="text-sm text-slate-600">เลือกวิชา:</label>
+          <select id="planSubject" onchange="renderPlans()" class="border border-slate-200 rounded-lg px-3 py-2 min-w-[220px]"></select>
+          <div class="flex gap-2 ml-auto">
+            <button onclick="downloadPlanTemplate()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm px-3 py-2 rounded-lg">📥 ฟอร์มตัวอย่าง</button>
+            <button onclick="$('planXlsx').click()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-2 rounded-lg">📤 นำเข้า .xlsx/.csv</button>
+            <input id="planXlsx" type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="importPlans(this)">
+          </div>
+        </div>
+        <h3 class="font-semibold text-brand-800 mb-2">➕ เพิ่มสื่อรายแผน</h3>
+        <div class="grid sm:grid-cols-12 gap-3">
+          <input id="plNo"   placeholder="แผนที่" class="border border-slate-200 rounded-lg px-3 py-2 sm:col-span-2">
+          <input id="plName" placeholder="ชื่อแผน *" class="border border-slate-200 rounded-lg px-3 py-2 sm:col-span-4">
+          <input id="plLink" placeholder="ลิ้งสื่อ HTML (URL) *" class="border border-slate-200 rounded-lg px-3 py-2 sm:col-span-5">
+          <button onclick="addPlan()" class="bg-brand-600 hover:bg-brand-700 text-white rounded-lg px-3 py-2 font-medium sm:col-span-1">เพิ่ม</button>
+        </div>
+      </div>
+      <div class="card rounded-2xl p-5">
+        <h3 class="font-semibold text-brand-800 mb-3">รายการสื่อในวิชานี้</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead><tr class="text-left text-slate-500 border-b">
+              <th class="py-2 w-16">แผนที่</th><th class="py-2">ชื่อแผน</th><th class="py-2">ลิ้งสื่อ</th><th class="py-2 w-24 text-right">จัดการ</th>
+            </tr></thead>
+            <tbody id="planList"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== TAB: จัดการสิทธิ์ ===== -->
+    <section id="tab-access" class="tab-panel hidden">
+      <div class="card rounded-2xl p-5 mb-5">
+        <div class="flex flex-wrap items-center gap-3 mb-4">
+          <label class="text-sm text-slate-600">เลือกวิชา:</label>
+          <select id="accSubject" onchange="renderAccess()" class="border border-slate-200 rounded-lg px-3 py-2 min-w-[220px]"></select>
+          <button onclick="openSyncModal()" class="ml-auto bg-amber2-500 hover:bg-amber2-600 text-white text-sm px-3 py-2 rounded-lg">🔄 ซิงค์จากคำสั่งซื้อ</button>
+        </div>
+        <h3 class="font-semibold text-brand-800 mb-2">➕ ให้สิทธิ์ด้วย Gmail</h3>
+        <p class="text-xs text-slate-500 mb-2">ใส่หลายอีเมลได้ คั่นด้วยเครื่องหมายจุลภาค เว้นวรรค หรือขึ้นบรรทัดใหม่</p>
+        <textarea id="accEmails" rows="2" placeholder="customer1@gmail.com, customer2@gmail.com" class="border border-slate-200 rounded-lg px-3 py-2 w-full"></textarea>
+        <div class="flex flex-wrap items-center gap-3 mt-3">
+          <label class="text-sm text-slate-600">วันหมดอายุ (ไม่บังคับ):</label>
+          <input id="accExpire" type="date" class="border border-slate-200 rounded-lg px-3 py-2">
+          <button onclick="addAccess()" class="bg-brand-600 hover:bg-brand-700 text-white rounded-lg px-4 py-2 font-medium">เพิ่มสิทธิ์</button>
+        </div>
+      </div>
+      <div class="card rounded-2xl p-5">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold text-brand-800">รายชื่อผู้มีสิทธิ์</h3>
+          <input id="accSearch" oninput="renderAccess()" placeholder="🔍 ค้นหาอีเมล..." class="border border-slate-200 rounded-lg px-3 py-1.5 text-sm w-48">
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead><tr class="text-left text-slate-500 border-b">
+              <th class="py-2">Gmail</th><th class="py-2 w-28">ให้สิทธิ์</th><th class="py-2 w-28">หมดอายุ</th><th class="py-2 w-20">สถานะ</th><th class="py-2 w-16 text-right">ลบ</th>
+            </tr></thead>
+            <tbody id="accessList"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== TAB: รายงานสรุป ===== -->
+    <section id="tab-report" class="tab-panel hidden">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+        <div class="card rounded-2xl p-5 text-center"><div class="text-3xl">📚</div><div id="rpSubjects" class="text-2xl font-bold text-brand-700 mt-1">-</div><div class="text-xs text-slate-500">วิชาทั้งหมด</div></div>
+        <div class="card rounded-2xl p-5 text-center"><div class="text-3xl">🎬</div><div id="rpPlans" class="text-2xl font-bold text-brand-700 mt-1">-</div><div class="text-xs text-slate-500">สื่อทั้งหมด</div></div>
+        <div class="card rounded-2xl p-5 text-center"><div class="text-3xl">🔑</div><div id="rpAccess" class="text-2xl font-bold text-brand-700 mt-1">-</div><div class="text-xs text-slate-500">สิทธิ์ทั้งหมด</div></div>
+        <div class="card rounded-2xl p-5 text-center"><div class="text-3xl">👥</div><div id="rpCustomers" class="text-2xl font-bold text-brand-700 mt-1">-</div><div class="text-xs text-slate-500">ลูกค้า (อีเมล)</div></div>
+      </div>
+      <div class="card rounded-2xl p-5">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold text-brand-800">สรุปรายวิชา</h3>
+          <button onclick="loadReport()" class="text-sm text-brand-600 hover:text-brand-700">🔄 รีเฟรช</button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead><tr class="text-left text-slate-500 border-b">
+              <th class="py-2">วิชา</th><th class="py-2">ระดับชั้น</th><th class="py-2 text-center w-24">สื่อ</th><th class="py-2 text-center w-24">สิทธิ์</th>
+            </tr></thead>
+            <tbody id="rpTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== TAB: ตั้งค่าระบบ ===== -->
+    <section id="tab-settings" class="tab-panel hidden">
+      <div class="grid lg:grid-cols-2 gap-5">
+        <div class="card rounded-2xl p-5">
+          <h3 class="font-semibold text-brand-800 mb-4">🏷️ ข้อมูลเว็บไซต์</h3>
+          <div class="space-y-3">
+            <div>
+              <label class="text-sm text-slate-600">ตราสัญลักษณ์ (โลโก้)</label>
+              <div class="flex items-center gap-3 mt-1">
+                <img id="logoPreview" class="hidden h-16 w-16 rounded-xl object-cover border border-brand-100">
+                <button onclick="$('logoFile').click()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm px-3 py-2 rounded-lg">📁 เลือกรูป (จะถูกย่อ + อัปขึ้น Drive)</button>
+                <input id="logoFile" type="file" accept="image/*" class="hidden" onchange="handleLogo(this)">
+                <input id="setLogoURL" type="hidden">
+              </div>
+            </div>
+            <div><label class="text-sm text-slate-600">ชื่อเว็บไซต์</label>
+              <input id="setSiteName" class="w-full border border-slate-200 rounded-lg px-3 py-2 mt-1"></div>
+            <div><label class="text-sm text-slate-600">สโลแกน</label>
+              <input id="setSlogan" class="w-full border border-slate-200 rounded-lg px-3 py-2 mt-1"></div>
+            <div><label class="text-sm text-slate-600">ลิงก์ติดต่อ (เพจ/Line — แสดงเมื่อลูกค้าไม่มีสิทธิ์)</label>
+              <input id="setContact" placeholder="https://facebook.com/..." class="w-full border border-slate-200 rounded-lg px-3 py-2 mt-1"></div>
+            <button onclick="saveSiteSettings()" class="w-full bg-brand-600 hover:bg-brand-700 text-white rounded-lg py-2.5 font-medium mt-2">💾 บันทึกข้อมูลเว็บไซต์</button>
+          </div>
+        </div>
+
+        <div class="card rounded-2xl p-5 self-start">
+          <h3 class="font-semibold text-brand-800 mb-4">🔐 ความปลอดภัย</h3>
+          <label class="text-sm text-slate-600">เปลี่ยน PIN ผู้ดูแล</label>
+          <input id="newPin" type="password" placeholder="PIN ใหม่ (อย่างน้อย 4 ตัว)" class="w-full border border-slate-200 rounded-lg px-3 py-2 mt-1">
+          <button onclick="changePin()" class="w-full bg-amber2-500 hover:bg-amber2-600 text-white rounded-lg py-2.5 font-medium mt-3">เปลี่ยน PIN</button>
+          <p class="text-xs text-slate-400 mt-3">เก็บ PIN ไว้เป็นความลับ ผู้ที่ทราบ PIN จะจัดการข้อมูลทั้งหมดได้</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== TAB: คู่มือ ===== -->
+    <section id="tab-manual" class="tab-panel hidden">
+      <div class="card rounded-2xl p-6 max-w-3xl">
+        <h3 class="font-display text-xl text-brand-800 mb-4">📖 คู่มือการใช้งาน</h3>
+
+        <h4 class="font-semibold text-brand-700 mt-2">สำหรับผู้ดูแล (เจ้าของระบบ)</h4>
+        <ol class="list-decimal ml-5 text-sm text-slate-600 space-y-1 mt-2">
+          <li><b>จัดการวิชา</b> — เพิ่มวิชาที่เปิดขาย (เช่น คณิตศาสตร์ ป.1)</li>
+          <li><b>จัดการสื่อ</b> — เลือกวิชา แล้วเพิ่มลิงก์สื่อแต่ละแผน (URL จาก Apps Script) หรือ นำเข้าทีเดียวจากไฟล์ .xlsx/.csv</li>
+          <li><b>จัดการสิทธิ์</b> — เลือกวิชา ใส่ Gmail ของลูกค้าที่ซื้อ (ใส่หลายอีเมลพร้อมกันได้) กำหนดวันหมดอายุได้</li>
+          <li><b>ซิงค์จากคำสั่งซื้อ</b> — ถ้าตั้งค่า CONFIG เชื่อมชีตคำสั่งซื้อแล้ว กดเพื่อดึงสิทธิ์อัตโนมัติ (กดพรีวิวก่อนได้)</li>
+          <li><b>สำรองข้อมูล</b> สม่ำเสมอ เผื่อกู้คืนภายหลัง</li>
+        </ol>
+
+        <h4 class="font-semibold text-brand-700 mt-5">สำหรับลูกค้า</h4>
+        <p class="text-sm text-slate-600 mt-1">เข้าเว็บ → กรอก Gmail ที่ใช้สั่งซื้อ → เห็นเฉพาะวิชาที่ตนมีสิทธิ์ → กด "เปิดสื่อ" ได้ทุกอุปกรณ์</p>
+
+        <h4 class="font-semibold text-brand-700 mt-5">การเชื่อมชีตคำสั่งซื้อ (CONFIG ใน Code.gs)</h4>
+        <ol class="list-decimal ml-5 text-sm text-slate-600 space-y-1 mt-2">
+          <li>ใส่ <code class="bg-slate-100 px-1 rounded">ORDER_SHEET_ID</code> และชื่อแท็บ</li>
+          <li>แก้ <code class="bg-slate-100 px-1 rounded">ORDER_COL</code> ให้ตรงชื่อคอลัมน์จริง (อีเมล/สินค้า/สถานะ)</li>
+          <li>จับคู่ชื่อสินค้า → รหัสวิชา ใน <code class="bg-slate-100 px-1 rounded">PRODUCT_TO_SUBJECT</code></li>
+        </ol>
+
+        <h4 class="font-semibold text-brand-700 mt-5">วิธี Deploy เป็น Web App</h4>
+        <ol class="list-decimal ml-5 text-sm text-slate-600 space-y-1 mt-2">
+          <li>สร้าง Google Sheet ใหม่ → เมนู <b>ส่วนขยาย (Extensions) → Apps Script</b></li>
+          <li>วางโค้ด <b>Code.gs</b> และสร้างไฟล์ HTML ชื่อ <b>index</b> วางโค้ด index.html</li>
+          <li>กด <b>การทำให้ใช้งานได้ (Deploy) → การทำให้ใช้งานใหม่ → เลือกชนิด: เว็บแอป</b></li>
+          <li>ดำเนินการในชื่อ: <b>ฉัน (Me)</b> · ผู้มีสิทธิ์เข้าถึง: <b>ทุกคน (Anyone)</b></li>
+          <li>คัดลอก <b>Web App URL</b> ไปแชร์ให้ลูกค้า</li>
+          <li>อัปเดตโค้ดทุกครั้ง: การทำให้ใช้งานได้ → จัดการการทำให้ใช้งานได้ → ✏️ แก้ไข → เวอร์ชัน: ใหม่ → ใช้งาน</li>
+        </ol>
+
+        <div class="mt-5 text-xs text-amber2-600 bg-amber2-400/10 rounded-lg p-3">
+          ⚠️ หมายเหตุความปลอดภัย: ระบบนี้คุม "การมองเห็น" ลิงก์ หากลูกค้านำลิงก์สื่อ (URL สาธารณะ) ไปแชร์ต่อ ผู้อื่นยังเปิดได้ หากต้องการล็อกระดับลิงก์จริง ต้องเพิ่มการตรวจสิทธิ์ในไฟล์สื่อด้วย
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="border-t border-brand-100 bg-white/60 py-4 px-4 text-center text-[11px] sm:text-xs text-slate-500 leading-relaxed">
+    Copyright © เพจครูพร้อมสอน. All Rights Reserved. สำหรับใช้ในโรงเรียนเท่านั้น
+    ไม่อนุญาตให้ดัดแปลง แก้ไข ทำซ้ำ เพื่อการพาณิชย์ หรือแอบอ้างเป็นผลงานของตนเอง
+  </footer>
+</div>
+
+<!-- ============================================================= -->
+<!-- ========================  MODALS  =========================== -->
+<!-- ============================================================= -->
+<!-- Admin PIN -->
+<div id="m-pin" class="modal fixed inset-0 z-[95] hidden items-center justify-center bg-black/40 p-4">
+  <div class="bg-white rounded-2xl p-6 w-full max-w-sm fade-up">
+    <h3 class="font-semibold text-brand-800 text-lg mb-3">🔐 เข้าสู่ระบบผู้ดูแล</h3>
+    <input id="pinInput" type="password" placeholder="กรอก PIN" class="w-full border border-slate-200 rounded-xl px-4 py-3 text-center text-lg tracking-widest"
+           onkeydown="if(event.key==='Enter')adminLogin()">
+    <div class="flex gap-2 mt-4">
+      <button onclick="closeModal('m-pin')" class="flex-1 bg-slate-100 hover:bg-slate-200 rounded-xl py-2.5">ยกเลิก</button>
+      <button onclick="adminLogin()" class="flex-1 bg-brand-600 hover:bg-brand-700 text-white rounded-xl py-2.5 font-medium">เข้าสู่ระบบ</button>
+    </div>
+  </div>
+</div>
+
+<!-- Clear confirm -->
+<div id="m-clear" class="modal fixed inset-0 z-[95] hidden items-center justify-center bg-black/40 p-4">
+  <div class="bg-white rounded-2xl p-6 w-full max-w-sm fade-up border-t-4 border-red-500">
+    <h3 class="font-semibold text-red-600 text-lg mb-2">🗑️ ล้างข้อมูลทั้งหมด</h3>
+    <p class="text-sm text-slate-600 mb-3">การกระทำนี้จะลบ <b>วิชา / สื่อ / สิทธิ์</b> ทั้งหมด (ตั้งค่าระบบไม่ถูกลบ) และกู้คืนไม่ได้ พิมพ์ <b>ยืนยัน</b> เพื่อดำเนินการ</p>
+    <input id="clearInput" placeholder='พิมพ์คำว่า ยืนยัน' class="w-full border border-red-200 rounded-xl px-4 py-3 text-center">
+    <div class="flex gap-2 mt-4">
+      <button onclick="closeModal('m-clear')" class="flex-1 bg-slate-100 hover:bg-slate-200 rounded-xl py-2.5">ยกเลิก</button>
+      <button onclick="doClear()" class="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl py-2.5 font-medium">ล้างข้อมูล</button>
+    </div>
+  </div>
+</div>
+
+<!-- Generic edit (subject / plan) -->
+<div id="m-edit" class="modal fixed inset-0 z-[95] hidden items-center justify-center bg-black/40 p-4">
+  <div class="bg-white rounded-2xl p-6 w-full max-w-md fade-up">
+    <h3 id="editTitle" class="font-semibold text-brand-800 text-lg mb-3">แก้ไข</h3>
+    <div id="editBody" class="space-y-3"></div>
+    <div class="flex gap-2 mt-4">
+      <button onclick="closeModal('m-edit')" class="flex-1 bg-slate-100 hover:bg-slate-200 rounded-xl py-2.5">ยกเลิก</button>
+      <button id="editSaveBtn" class="flex-1 bg-brand-600 hover:bg-brand-700 text-white rounded-xl py-2.5 font-medium">บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<!-- Sync -->
+<div id="m-sync" class="modal fixed inset-0 z-[95] hidden items-center justify-center bg-black/40 p-4">
+  <div class="bg-white rounded-2xl p-6 w-full max-w-md fade-up border-t-4 border-amber2-500">
+    <h3 class="font-semibold text-amber2-600 text-lg mb-2">🔄 ซิงค์สิทธิ์จากชีตคำสั่งซื้อ</h3>
+    <p class="text-sm text-slate-600 mb-3">ระบบจะอ่านชีตคำสั่งซื้อ (ตั้งค่าใน CONFIG ของ Code.gs) แล้วเพิ่มสิทธิ์ตามที่จับคู่ไว้</p>
+    <div id="syncResult" class="text-sm bg-slate-50 rounded-lg p-3 mb-3 hidden"></div>
+    <div class="flex gap-2">
+      <button onclick="runSync(true)"  class="flex-1 bg-slate-100 hover:bg-slate-200 rounded-xl py-2.5">👁️ พรีวิว</button>
+      <button onclick="runSync(false)" class="flex-1 bg-amber2-500 hover:bg-amber2-600 text-white rounded-xl py-2.5 font-medium">เพิ่มสิทธิ์จริง</button>
+    </div>
+    <button onclick="closeModal('m-sync')" class="w-full text-slate-500 text-sm mt-3">ปิด</button>
+  </div>
+</div>
+
+<script>
+/* ===================== Helpers ===================== */
+const $ = id => document.getElementById(id);
+let ADMIN_PIN = '';
+let SUBJECTS_CACHE = [];
+
+function showLoading(msg){ $('loadingMsg').textContent = msg||'กำลังโหลด...'; $('loading').classList.remove('hidden'); $('loading').classList.add('flex'); }
+function hideLoading(){ $('loading').classList.add('hidden'); $('loading').classList.remove('flex'); }
+function toast(msg, type){
+  const c = $('toast'); const el = document.createElement('div');
+  const color = type==='error' ? 'bg-red-600' : (type==='warn'?'bg-amber2-500':'bg-brand-600');
+  el.className = `${color} text-white px-4 py-2.5 rounded-xl shadow-lg text-sm fade-up max-w-xs`;
+  el.textContent = msg; c.appendChild(el);
+  setTimeout(()=>{ el.style.transition='opacity .3s'; el.style.opacity='0'; setTimeout(()=>el.remove(),300); }, 3200);
+}
+function openModal(id){ $(id).classList.remove('hidden'); $(id).classList.add('flex'); }
+function closeModal(id){ $(id).classList.add('hidden'); $(id).classList.remove('flex'); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* เรียก GAS REST API ผ่าน fetch (ใช้ text/plain เพื่อเลี่ยง CORS preflight)
+   call site เดิมไม่ต้องแก้ — แปลง argument ตามลำดับเป็น payload ให้อัตโนมัติ */
+const ARG_MAP = {
+  getSettings:[], getMyContent:['email'], adminLogin:['pin'],
+  getSubjects:['pin'], addSubject:['pin','data'], updateSubject:['pin','id','data'], deleteSubject:['pin','id'],
+  getPlans:['pin','subjectId'], addPlan:['pin','data'], updatePlan:['pin','id','data'], deletePlan:['pin','id'],
+  bulkImportPlans:['pin','subjectId','rows'],
+  getAccess:['pin','subjectId'], addAccess:['pin','subjectId','emails','expire'], updateAccess:['pin','id','data'], deleteAccess:['pin','id'],
+  syncFromOrders:['pin','dryRun'], getReportData:['pin'],
+  backupAllData:['pin'], importBackupData:['pin','json'], clearAllData:['pin','confirmText'],
+  uploadImageToDrive:['pin','base64','filename'], saveSettings:['pin','data']
+};
+async function gas(action){
+  const args = Array.prototype.slice.call(arguments, 1);
+  const keys = ARG_MAP[action] || [];
+  const payload = { action };
+  keys.forEach((k,i)=>{ payload[k] = args[i]; });
+  const res = await fetch(API_URL, {
+    method:'POST',
+    headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload)
+  });
+  return res.json();
+}
+
+/* ===================== สถานะการเชื่อมต่อ ===================== */
+async function checkConnection(){
+  try{
+    const res = await gas('getSettings');
+    if(res && res.ok){
+      $('connDot').className='w-2 h-2 rounded-full bg-green-500 blink';
+      $('connText').textContent='☁️ เชื่อมต่อ Google Sheets (Online Mode)';
+      const d = res.data || {};
+      if(d.siteName) $('custTitle').textContent = d.siteName;
+      if(d.slogan)   $('custSlogan').textContent = d.slogan;
+      if(d.logoURL){ $('custLogo').src = d.logoURL; $('custLogo').classList.remove('hidden'); $('custLogoFallback').classList.add('hidden'); }
+      window._contactLink = d.contactLink || '';
+    }
+  }catch(e){
+    $('connText').textContent='⚠️ เชื่อมต่อไม่สำเร็จ';
+  }
+}
+
+/* ===================== ฝั่งลูกค้า ===================== */
+async function customerLogin(){
+  const email = $('custEmail').value.trim();
+  if(!email){ toast('กรุณากรอกอีเมล','warn'); return; }
+  showLoading('กำลังตรวจสอบสิทธิ์...');
+  try{
+    const res = await gas('getMyContent', email);
+    if(!res.ok){ toast(res.error,'error'); return; }
+    renderCustomerContent(res.data);
+  }catch(e){ toast('เกิดข้อผิดพลาด: '+e.message,'error'); }
+  finally{ hideLoading(); }
+}
+
+function renderCustomerContent(d){
+  $('loginBox').classList.add('hidden');
+  const box = $('contentBox'); box.classList.remove('hidden'); box.classList.add('fade-up');
+  if(!d.subjects.length){
+    box.innerHTML = `<div class="card rounded-2xl p-8 text-center">
+      <div class="text-4xl mb-2">🔒</div>
+      <h3 class="font-semibold text-brand-800">ยังไม่พบสิทธิ์เข้าถึง</h3>
+      <p class="text-sm text-slate-500 mt-1">อีเมล <b>${esc(d.email)}</b> ยังไม่มีวิชาที่เปิดให้เข้าถึง<br>กรุณาติดต่อเพจครูพร้อมสอน</p>
+      ${window._contactLink?`<a href="${esc(window._contactLink)}" target="_blank" class="inline-block mt-3 bg-brand-600 hover:bg-brand-700 text-white text-sm px-4 py-2 rounded-lg">ติดต่อสอบถาม</a>`:''}
+      <div><button onclick="logoutCustomer()" class="mt-4 text-sm text-brand-600 underline">ลองอีเมลอื่น</button></div>
+    </div>`;
+    return;
+  }
+  let html = `<div class="flex items-center justify-between mb-4">
+      <p class="text-sm text-slate-600">สวัสดี 👋 <b>${esc(d.email)}</b></p>
+      <button onclick="logoutCustomer()" class="text-xs text-slate-400 hover:text-brand-600 underline">ออกจากระบบ</button>
+    </div>`;
+  d.subjects.forEach((s,i)=>{
+    const pid = 'sub-'+i;
+    html += `<div class="card rounded-2xl mb-3 overflow-hidden">
+      <button onclick="document.getElementById('${pid}').classList.toggle('hidden')" class="w-full flex items-center justify-between px-5 py-4 text-left">
+        <span><span class="font-semibold text-brand-800">${esc(s.name)}</span>
+          ${s.level?`<span class="text-xs bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full ml-2">${esc(s.level)}</span>`:''}
+          <span class="block text-xs text-slate-400 mt-0.5">${s.plans.length} สื่อ</span></span>
+        <span class="text-brand-400 text-xl">›</span>
+      </button>
+      <div id="${pid}" class="px-5 pb-4 space-y-2">`;
+    if(!s.plans.length){ html += `<p class="text-sm text-slate-400">ยังไม่มีสื่อในวิชานี้</p>`; }
+    s.plans.forEach(p=>{
+      html += `<div class="flex items-center justify-between bg-brand-50/50 rounded-lg px-3 py-2">
+        <span class="text-sm">${p.planNo?`<b class="text-brand-700">แผน ${esc(p.planNo)}</b> · `:''}${esc(p.name)}</span>
+        ${p.link?`<a href="${esc(p.link)}" target="_blank" class="bg-brand-600 hover:bg-brand-700 text-white text-xs px-3 py-1.5 rounded-lg whitespace-nowrap">เปิดสื่อ →</a>`
+                :`<span class="text-xs text-slate-400">ยังไม่มีลิงก์</span>`}
+      </div>`;
+    });
+    html += `</div></div>`;
+  });
+  box.innerHTML = html;
+}
+function logoutCustomer(){
+  $('contentBox').classList.add('hidden'); $('contentBox').innerHTML='';
+  $('loginBox').classList.remove('hidden'); $('custEmail').value='';
+}
+
+/* ===================== เข้าสู่ระบบผู้ดูแล ===================== */
+function openAdminGate(){ openModal('m-pin'); setTimeout(()=>$('pinInput').focus(),100); }
+async function adminLogin(){
+  const pin = $('pinInput').value.trim();
+  if(!pin){ toast('กรุณากรอก PIN','warn'); return; }
+  showLoading('กำลังตรวจสอบ...');
+  try{
+    const res = await gas('adminLogin', pin);
+    if(!res.ok){ toast(res.error,'error'); return; }
+    ADMIN_PIN = pin;
+    closeModal('m-pin'); $('pinInput').value='';
+    $('view-customer').classList.add('hidden');
+    $('view-admin').classList.remove('hidden');
+    window.scrollTo(0,0);
+    switchTab('subjects');
+  }catch(e){ toast('ผิดพลาด: '+e.message,'error'); }
+  finally{ hideLoading(); }
+}
+function exitAdmin(){
+  ADMIN_PIN='';
+  $('view-admin').classList.add('hidden');
+  $('view-customer').classList.remove('hidden');
+}
+
+/* ===================== Tabs ===================== */
+function switchTab(name){
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.add('hidden'));
+  $('tab-'+name).classList.remove('hidden');
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
+  if(name==='subjects') loadSubjects();
+  if(name==='plans')   loadSubjectsThen(renderPlanSubjectSelect);
+  if(name==='access')  loadSubjectsThen(renderAccessSubjectSelect);
+  if(name==='report'  && typeof loadReport==='function')   loadReport();
+  if(name==='settings'&& typeof loadSettings==='function') loadSettings();
+}
+
+/* ===================== วิชา (Subjects) ===================== */
+async function loadSubjects(){
+  showLoading('กำลังโหลดวิชา...');
+  try{
+    const res = await gas('getSubjects', ADMIN_PIN);
+    if(res.ok){ SUBJECTS_CACHE = res.data; renderSubjects(); }
+    else toast(res.error,'error');
+  }catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
+}
+async function loadSubjectsThen(cb){
+  if(!SUBJECTS_CACHE.length){ const r = await gas('getSubjects', ADMIN_PIN); if(r.ok) SUBJECTS_CACHE=r.data; }
+  cb();
+}
+function renderSubjects(){
+  const q = ($('sjSearch').value||'').toLowerCase();
+  const list = SUBJECTS_CACHE.filter(s=>(s.name+s.level).toLowerCase().includes(q));
+  $('subjectList').innerHTML = list.length ? list.map(s=>`
+    <div class="border border-brand-100 rounded-xl p-4">
+      <div class="flex items-start justify-between">
+        <div>
+          <div class="font-semibold text-brand-800">${esc(s.name)}</div>
+          <div class="text-xs text-slate-400">${esc(s.level||'-')}</div>
+        </div>
+        <span class="text-[10px] px-2 py-0.5 rounded-full ${s.status==='ปิด'?'bg-slate-100 text-slate-500':'bg-green-50 text-green-600'}">${esc(s.status||'เปิด')}</span>
+      </div>
+      <div class="flex gap-3 text-xs text-slate-500 mt-2">
+        <span>🎬 ${s.planCount} สื่อ</span><span>🔑 ${s.accessCount} สิทธิ์</span>
+      </div>
+      <div class="flex gap-2 mt-3">
+        <button onclick='editSubject(${JSON.stringify(s)})' class="flex-1 bg-amber2-400/20 text-amber2-600 text-xs py-1.5 rounded-lg">✏️ แก้ไข</button>
+        <button onclick="delSubject('${s.id}','${esc(s.name)}')" class="flex-1 bg-red-50 text-red-600 text-xs py-1.5 rounded-lg">🗑️ ลบ</button>
+      </div>
+    </div>`).join('') : `<p class="text-sm text-slate-400 col-span-full text-center py-6">ยังไม่มีวิชา</p>`;
+}
+async function addSubject(){
+  const name=$('sjName').value.trim(); if(!name){ toast('กรอกชื่อวิชา','warn'); return; }
+  showLoading('กำลังบันทึก...');
+  try{
+    const res = await gas('addSubject', ADMIN_PIN, {name, level:$('sjLevel').value.trim(), desc:$('sjDesc').value.trim()});
+    if(res.ok){ toast('เพิ่มวิชาแล้ว'); $('sjName').value=$('sjLevel').value=$('sjDesc').value=''; SUBJECTS_CACHE=[]; loadSubjects(); }
+    else toast(res.error,'error');
+  }catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
+}
+function editSubject(s){
+  $('editTitle').textContent='แก้ไขวิชา';
+  $('editBody').innerHTML = `
+    <input id="e_name"  value="${esc(s.name)}"  placeholder="ชื่อวิชา" class="w-full border border-slate-200 rounded-lg px-3 py-2">
+    <input id="e_level" value="${esc(s.level||'')}" placeholder="ระดับชั้น" class="w-full border border-slate-200 rounded-lg px-3 py-2">
+    <input id="e_desc"  value="${esc(s.desc||'')}"  placeholder="คำอธิบาย" class="w-full border border-slate-200 rounded-lg px-3 py-2">
+    <select id="e_status" class="w-full border border-slate-200 rounded-lg px-3 py-2">
+      <option ${s.status!=='ปิด'?'selected':''}>เปิด</option><option ${s.status==='ปิด'?'selected':''}>ปิด</option>
+    </select>`;
+  $('editSaveBtn').onclick = async ()=>{
+    showLoading('กำลังบันทึก...');
+    try{
+      const res = await gas('updateSubject', ADMIN_PIN, s.id, {name:$('e_name').value.trim(), level:$('e_level').value.trim(), desc:$('e_desc').value.trim(), status:$('e_status').value});
+      if(res.ok){ toast('บันทึกแล้ว'); closeModal('m-edit'); SUBJECTS_CACHE=[]; loadSubjects(); } else toast(res.error,'error');
+    }catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
+  };
+  openModal('m-edit');
+}
+async function delSubject(id,name){
+  if(!confirm('ลบวิชา "'+name+'" ?\n(สื่อและสิทธิ์ของวิชานี้จะถูกลบด้วย)')) return;
+  showLoading('กำลังลบ...');
+  try{ const res = await gas('deleteSubject', ADMIN_PIN, id);
+    if(res.ok){ toast('ลบแล้ว'); SUBJECTS_CACHE=[]; loadSubjects(); } else toast(res.error,'error');
+  }catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
+}
+
+/* ===================== สื่อ (Plans) ===================== */
+function subjectOptions(){ return SUBJECTS_CACHE.map(s=>`<option value="${s.id}">${esc(s.name)}${s.level?' ('+esc(s.level)+')':''}</option>`).join(''); }
+function renderPlanSubjectSelect(){ const sel=$('planSubject'); const cur=sel.value; sel.innerHTML=subjectOptions(); if(cur)sel.value=cur; renderPlans(); }
+async function renderPlans(){
+  const sid = $('planSubject').value; if(!sid){ $('planList').innerHTML=`<tr><td colspan="4" class="py-4 text-center text-slate-400">— กรุณาเพิ่ม/เลือกวิชา —</td></tr>`; return; }
+  showLoading('กำลังโหลดสื่อ...');
+  try{
+    const res = await gas('getPlans', ADMIN_PIN, sid);
+    if(!res.ok){ toast(res.error,'error'); return; }
+    $('planList').innerHTML = res.data.length ? res.data.map(p=>`
+      <tr class="border-b last:border-0">
+        <td class="py-2">${esc(p.planNo)}</td>
+        <td class="py-2">${esc(p.name)}</td>
+        <td class="py-2 max-w-[260px] truncate"><a href="${esc(p.link)}" target="_blank" class="text-brand-600 underline">${esc(p.link)}</a></td>
+        <td class="py-2 text-right whitespace-nowrap">
+          <button onclick='editPlan(${JSON.stringify(p)})' class="text-amber2-600">✏️</button>
+          <button onclick="delPlan('${p.id}')" class="text-red-600 ml-2">🗑️</button>
+        </td></tr>`).join('') : `<tr><td colspan="4" class="py-4 text-center text-slate-400">ยังไม่มีสื่อ</td></tr>`;
+  }catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
+}
+async function addPlan(){
+  const sid=$('planSubject').value; if(!sid){ toast('เลือกวิชาก่อน','warn'); return; }
+  const name=$('plName').value.trim(), link=$('plLink').value.trim();
+  if(!name||!link){ toast('กรอกชื่อแผนและลิงก์','warn'); return; }
+  showLoading('กำลังบันทึก...');
+  try{
+    const res = await gas('addPlan', ADMIN_PIN, {subjectId:sid, planNo:$('plNo').value.trim(), name, link});
+    if(res.ok){ toast('เพิ่มสื่อแล้ว'); $('plNo').value=$('plName').value=$('plLink').value=''; renderPlans(); SUBJECTS_CACHE=[]; }
+    else toast(res.error,'error');
+  }catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
+}
+function editPlan(p){
+  $('editTitle').textContent='แก้ไขสื่อ';
+  $('editBody').innerHTML = `
+    <input id="ep_no"   value="${esc(p.planNo)}" placeholder="แผนที่" class="w-full border border-slate-200 rounded-lg px-3 py-2">
+    <input id="ep_name" value="${esc(p.name)}" placeholder="ชื่อแผน" class="w-full border border-slate-200 rounded-lg px-3 py-2">
+    <input id="ep_link" value="${esc(p.link)}" placeholder="ลิ้งสื่อ" class="w-full border border-slate-200 rounded-lg px-3 py-2">`;
+  $('editSaveBtn').onclick = async ()=>{
+    showLoading('กำลังบันทึก...');
+    try{ const res = await gas('updatePlan', ADMIN_PIN, p.id, {subjectId:p.subjectId, planNo:$('ep_no').value.trim(), name:$('ep_name').value.trim(), link:$('ep_link').value.trim()});
+      if(res.ok){ toast('บันทึกแล้ว'); closeModal('m-edit'); renderPlans(); } else toast(res.error,'error');
+    }catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
+  };
+  openModal('m-edit');
+}
+async function delPlan(id){
+  if(!confirm('ลบสื่อนี้?')) return;
+  showLoading('กำลังลบ...');
+  try{ const res = await gas('deletePlan', ADMIN_PIN, id); if(res.ok){ toast('ลบแล้ว'); renderPlans(); SUBJECTS_CACHE=[]; } else toast(res.error,'error'); }
+  catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
+}
+function downloadPlanTemplate(){
+  const csv='\uFEFF'+['แผนที่,ชื่อแผน,ลิ้งสื่อ','1,ตัวอย่างชื่อแผน,https://script.google.com/.../exec?page=plan1'].join('\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='ฟอร์มนำเข้าสื่อ.csv'; a.click();
+}
+function importPlans(input){
+  const sid=$('planSubject').value; if(!sid){ toast('เลือกวิชาปลายทางก่อน','warn'); input.value=''; return; }
+  const file=input.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=async(e)=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array'});
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
+      const arr=rows.map(r=>({ planNo:r['แผนที่']||r['planNo']||'', name:r['ชื่อแผน']||r['name']||'', link:r['ลิ้งสื่อ']||r['link']||'' }));
+      showLoading('กำลังนำเข้า...');
+      const res=await gas('bulkImportPlans', ADMIN_PIN, sid, arr);
+      if(res.ok){ toast('นำเข้า '+res.data+' รายการ'); renderPlans(); SUBJECTS_CACHE=[]; } else toast(res.error,'error');
+    }catch(err){ toast('อ่านไฟล์ไม่สำเร็จ: '+err.message,'error'); }
+    finally{ hideLoading(); input.value=''; }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+/* ===================== สิทธิ์ (Access) ===================== */
+function renderAccessSubjectSelect(){ const sel=$('accSubject'); const cur=sel.value; sel.innerHTML=subjectOptions(); if(cur)sel.value=cur; renderAccess(); }
+async function renderAccess(){
+  const sid=$('accSubject').value; if(!sid){ $('accessList').innerHTML=`<tr><td colspan="5" class="py-4 text-center text-slate-400">— เลือกวิชา —</td></tr>`; return; }
+  showLoading('กำลังโหลด...');
+  try{
+    const res=await gas('getAccess', ADMIN_PIN, sid);
+    if(!res.ok){ toast(res.error,'error'); return; }
+    const q=($('accSearch').value||'').toLowerCase();
+    const list=res.data.filter(a=>a.email.toLowerCase().includes(q));
+    $('accessList').innerHTML = list.length ? list.map(a=>`
+      <tr class="border-b last:border-0">
+        <td class="py-2">${esc(a.email)}</td>
+        <td class="py-2 text-xs text-slate-500">${esc((a.granted||'').split(' ')[0])}</td>
+        <td class="py-2 text-xs text-slate-500">${esc(a.expire||'-')}</td>
+        <td class="py-2"><span class="text-[10px] px-2 py-0.5 rounded-full ${a.status==='ปิด'?'bg-slate-100 text-slate-500':'bg-green-50 text-green-600'}">${esc(a.status||'เปิด')}</span></td>
+        <td class="py-2 text-right"><button onclick="delAccess('${a.id}')" class="text-red-600">🗑️</button></td>
+      </tr>`).join('') : `<tr><td colspan="5" class="py-4 text-center text-slate-400">ยังไม่มีผู้มีสิทธิ์</td></tr>`;
+  }catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
+}
+async function addAccess(){
+  const sid=$('accSubject').value; if(!sid){ toast('เลือกวิชาก่อน','warn'); return; }
+  const emails=$('accEmails').value.trim(); if(!emails){ toast('กรอกอีเมล','warn'); return; }
+  showLoading('กำลังเพิ่มสิทธิ์...');
+  try{
+    const res=await gas('addAccess', ADMIN_PIN, sid, emails, $('accExpire').value);
+    if(res.ok){ toast(`เพิ่ม ${res.data.added} รายการ`+(res.data.skipped?` (ซ้ำ ${res.data.skipped})`:'')); $('accEmails').value=''; renderAccess(); SUBJECTS_CACHE=[]; }
+    else toast(res.error,'error');
+  }catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
+}
+async function delAccess(id){
+  if(!confirm('ลบสิทธิ์นี้?')) return;
+  showLoading('กำลังลบ...');
+  try{ const res=await gas('deleteAccess', ADMIN_PIN, id); if(res.ok){ toast('ลบแล้ว'); renderAccess(); SUBJECTS_CACHE=[]; } else toast(res.error,'error'); }
+  catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
+}
+
+/* ===================== ซิงค์จากคำสั่งซื้อ ===================== */
+function openSyncModal(){ $('syncResult').classList.add('hidden'); openModal('m-sync'); }
+async function runSync(dry){
+  showLoading(dry?'กำลังพรีวิว...':'กำลังเพิ่มสิทธิ์...');
+  try{
+    const res=await gas('syncFromOrders', ADMIN_PIN, dry);
+    const box=$('syncResult'); box.classList.remove('hidden');
+    if(!res.ok){ box.innerHTML=`<span class="text-red-600">${esc(res.error)}</span>`; return; }
+    const um=res.data.unmappedProducts||{}; const umKeys=Object.keys(um);
+    box.innerHTML = `<div class="text-brand-700 font-medium">${dry?'พรีวิว: จะเพิ่ม':'เพิ่มแล้ว'} ${res.data.added} สิทธิ์</div>`
+      + (umKeys.length?`<div class="text-amber2-600 mt-2 text-xs">⚠️ สินค้าที่ยังไม่ได้จับคู่ใน CONFIG.PRODUCT_TO_SUBJECT:<br>${umKeys.map(k=>esc(k)+' ('+um[k]+')').join('<br>')}</div>`:'');
+    if(!dry){ SUBJECTS_CACHE=[]; renderAccess(); }
+  }catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
+}
+
+/* ===================== Backup / Import / Clear ===================== */
+async function doBackup(){
+  showLoading('กำลังสำรองข้อมูล...');
+  try{
+    const res=await gas('backupAllData', ADMIN_PIN);
+    if(!res.ok){ toast(res.error,'error'); return; }
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([JSON.stringify(res.data,null,2)],{type:'application/json'}));
+    a.download='krupromsue_backup_'+new Date().toISOString().slice(0,10)+'.json'; a.click();
+    toast('ดาวน์โหลดไฟล์สำรองแล้ว');
+  }catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
+}
+function doImport(input){
+  const file=input.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=async(e)=>{
+    if(!confirm('นำเข้าข้อมูลจากไฟล์สำรอง? ข้อมูลเดิม (วิชา/สื่อ/สิทธิ์) จะถูกแทนที่')) { input.value=''; return; }
+    showLoading('กำลังนำเข้า...');
+    try{ const res=await gas('importBackupData', ADMIN_PIN, e.target.result);
+      if(res.ok){ toast('นำเข้าสำเร็จ'); SUBJECTS_CACHE=[]; switchTab('subjects'); } else toast(res.error,'error');
+    }catch(err){ toast('ไฟล์ไม่ถูกต้อง','error'); } finally{ hideLoading(); input.value=''; }
+  };
+  reader.readAsText(file);
+}
+function openClearModal(){ $('clearInput').value=''; openModal('m-clear'); }
+async function doClear(){
+  showLoading('กำลังล้างข้อมูล...');
+  try{ const res=await gas('clearAllData', ADMIN_PIN, $('clearInput').value.trim());
+    if(res.ok){ toast('ล้างข้อมูลแล้ว'); closeModal('m-clear'); SUBJECTS_CACHE=[]; switchTab('subjects'); } else toast(res.error,'warn');
+  }catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
+}
+
+/* ===================== รายงานสรุป ===================== */
+async function loadReport(){
+  showLoading('กำลังโหลดรายงาน...');
+  try{
+    const res = await gas('getReportData', ADMIN_PIN);
+    if(!res.ok){ toast(res.error,'error'); return; }
+    const d = res.data;
+    $('rpSubjects').textContent  = d.totalSubjects;
+    $('rpPlans').textContent     = d.totalPlans;
+    $('rpAccess').textContent    = d.totalAccess;
+    $('rpCustomers').textContent = d.totalCustomers;
+    $('rpTable').innerHTML = d.perSubject.length ? d.perSubject.map(s=>`
+      <tr class="border-b last:border-0">
+        <td class="py-2">${esc(s.name)}</td>
+        <td class="py-2 text-slate-500">${esc(s.level||'-')}</td>
+        <td class="py-2 text-center">${s.plans}</td>
+        <td class="py-2 text-center">${s.access}</td>
+      </tr>`).join('') : `<tr><td colspan="4" class="py-4 text-center text-slate-400">ยังไม่มีข้อมูล</td></tr>`;
+  }catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
+}
+
+/* ===================== ตั้งค่าระบบ ===================== */
+async function loadSettings(){
+  showLoading('กำลังโหลดการตั้งค่า...');
+  try{
+    const res = await gas('getSettings');
+    if(res.ok){
+      const d = res.data;
+      $('setSiteName').value = d.siteName || '';
+      $('setSlogan').value   = d.slogan || '';
+      $('setContact').value  = d.contactLink || '';
+      $('setLogoURL').value  = d.logoURL || '';
+      if(d.logoURL){ $('logoPreview').src = d.logoURL; $('logoPreview').classList.remove('hidden'); }
+    }
+  }catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
+}
+async function saveSiteSettings(){
+  showLoading('กำลังบันทึก...');
+  try{
+    const res = await gas('saveSettings', ADMIN_PIN, {
+      siteName:$('setSiteName').value.trim(),
+      slogan:$('setSlogan').value.trim(),
+      contactLink:$('setContact').value.trim(),
+      logoURL:$('setLogoURL').value.trim()
+    });
+    if(res.ok) toast('บันทึกการตั้งค่าแล้ว'); else toast(res.error,'error');
+  }catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
+}
+async function changePin(){
+  const np = $('newPin').value.trim();
+  if(np.length < 4){ toast('PIN ต้องอย่างน้อย 4 ตัว','warn'); return; }
+  showLoading('กำลังเปลี่ยน PIN...');
+  try{
+    const res = await gas('saveSettings', ADMIN_PIN, {adminPIN:np});
+    if(res.ok){ ADMIN_PIN = np; $('newPin').value=''; toast('เปลี่ยน PIN เรียบร้อย'); } else toast(res.error,'error');
+  }catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
+}
+
+/* บีบอัด/ย่อรูปก่อนอัปโหลด */
+function compressImage(file, maxW){
+  return new Promise((resolve,reject)=>{
+    const r = new FileReader();
+    r.onload = ev=>{
+      const img = new Image();
+      img.onload = ()=>{
+        const scale = Math.min(1, maxW/img.width);
+        const w = Math.round(img.width*scale), h = Math.round(img.height*scale);
+        const c = document.createElement('canvas'); c.width=w; c.height=h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        resolve(c.toDataURL('image/jpeg',0.82));
+      };
+      img.onerror = reject; img.src = ev.target.result;
+    };
+    r.onerror = reject; r.readAsDataURL(file);
+  });
+}
+async function handleLogo(input){
+  const file = input.files[0]; if(!file) return;
+  showLoading('กำลังย่อรูปและอัปโหลด...');
+  try{
+    const dataUrl = await compressImage(file, 400);
+    const res = await gas('uploadImageToDrive', ADMIN_PIN, dataUrl, 'logo_'+Date.now()+'.jpg');
+    if(res.ok){
+      $('setLogoURL').value = res.data;
+      $('logoPreview').src = res.data; $('logoPreview').classList.remove('hidden');
+      toast('อัปโหลดโลโก้แล้ว — กด "บันทึกข้อมูลเว็บไซต์" เพื่อยืนยัน');
+    } else toast(res.error,'error');
+  }catch(e){ toast('อัปโหลดไม่สำเร็จ: '+(e.message||e),'error'); }
+  finally{ hideLoading(); input.value=''; }
+}
+
+/* ===================== Init ===================== */
+window.addEventListener('DOMContentLoaded', checkConnection);
+</script>
+</body>
+</html>
