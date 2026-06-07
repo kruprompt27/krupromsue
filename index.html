@@ -112,8 +112,7 @@ tailwind.config = {
   </div>
 
   <footer class="border-t border-brand-100 bg-white/60 py-4 px-4 text-center text-[11px] sm:text-xs text-slate-500 leading-relaxed">
-    Copyright © เพจครูพร้อมสอน. All Rights Reserved. สำหรับใช้ในโรงเรียนเท่านั้น
-    ไม่อนุญาตให้ดัดแปลง แก้ไข ทำซ้ำ เพื่อการพาณิชย์ หรือแอบอ้างเป็นผลงานของตนเอง
+    Copyright © เพจครูพร้อมสอน. All Rights Reserved.
   </footer>
 </div>
 
@@ -371,8 +370,7 @@ tailwind.config = {
   </main>
 
   <footer class="border-t border-brand-100 bg-white/60 py-4 px-4 text-center text-[11px] sm:text-xs text-slate-500 leading-relaxed">
-    Copyright © เพจครูพร้อมสอน. All Rights Reserved. สำหรับใช้ในโรงเรียนเท่านั้น
-    ไม่อนุญาตให้ดัดแปลง แก้ไข ทำซ้ำ เพื่อการพาณิชย์ หรือแอบอ้างเป็นผลงานของตนเอง
+    Copyright © เพจครูพร้อมสอน. All Rights Reserved.
   </footer>
 </div>
 
@@ -496,6 +494,13 @@ async function checkConnection(){
 }
 
 /* ===================== ฝั่งลูกค้า ===================== */
+/* จำอีเมล (localStorage — กันพังเมื่อพรีวิว) */
+function saveEmail_(e){ try{ localStorage.setItem('kps_email', e); }catch(_){ } }
+function getEmail_(){ try{ return localStorage.getItem('kps_email')||''; }catch(_){ return ''; } }
+function clearEmail_(){ try{ localStorage.removeItem('kps_email'); }catch(_){ } }
+
+let MY_DATA = null;
+
 async function customerLogin(){
   const email = $('custEmail').value.trim();
   if(!email){ toast('กรุณากรอกอีเมล','warn'); return; }
@@ -503,12 +508,14 @@ async function customerLogin(){
   try{
     const res = await gas('getMyContent', email);
     if(!res.ok){ toast(res.error,'error'); return; }
+    if(res.data.subjects.length) saveEmail_(res.data.email);  // จำเฉพาะอีเมลที่มีสิทธิ์
     renderCustomerContent(res.data);
   }catch(e){ toast('เกิดข้อผิดพลาด: '+e.message,'error'); }
   finally{ hideLoading(); }
 }
 
 function renderCustomerContent(d){
+  MY_DATA = d;
   $('loginBox').classList.add('hidden');
   const box = $('contentBox'); box.classList.remove('hidden'); box.classList.add('fade-up');
   if(!d.subjects.length){
@@ -516,38 +523,69 @@ function renderCustomerContent(d){
       <div class="text-4xl mb-2">🔒</div>
       <h3 class="font-semibold text-brand-800">ยังไม่พบสิทธิ์เข้าถึง</h3>
       <p class="text-sm text-slate-500 mt-1">อีเมล <b>${esc(d.email)}</b> ยังไม่มีวิชาที่เปิดให้เข้าถึง<br>กรุณาติดต่อเพจครูพร้อมสอน</p>
-      ${window._contactLink?`<a href="${esc(window._contactLink)}" target="_blank" class="inline-block mt-3 bg-brand-600 hover:bg-brand-700 text-white text-sm px-4 py-2 rounded-lg">ติดต่อสอบถาม</a>`:''}
+      ${window._contactLink?`<a href="${esc(window._contactLink)}" target="_blank" rel="noopener" class="inline-block mt-3 bg-brand-600 hover:bg-brand-700 text-white text-sm px-4 py-2 rounded-lg">ติดต่อสอบถาม</a>`:''}
       <div><button onclick="logoutCustomer()" class="mt-4 text-sm text-brand-600 underline">ลองอีเมลอื่น</button></div>
     </div>`;
     return;
   }
-  let html = `<div class="flex items-center justify-between mb-4">
-      <p class="text-sm text-slate-600">สวัสดี 👋 <b>${esc(d.email)}</b></p>
-      <button onclick="logoutCustomer()" class="text-xs text-slate-400 hover:text-brand-600 underline">ออกจากระบบ</button>
-    </div>`;
-  d.subjects.forEach((s,i)=>{
-    const pid = 'sub-'+i;
-    html += `<div class="card rounded-2xl mb-3 overflow-hidden">
-      <button onclick="document.getElementById('${pid}').classList.toggle('hidden')" class="w-full flex items-center justify-between px-5 py-4 text-left">
-        <span><span class="font-semibold text-brand-800">${esc(s.name)}</span>
-          ${s.level?`<span class="text-xs bg-brand-50 text-brand-700 px-2 py-0.5 rounded-full ml-2">${esc(s.level)}${s.hours?' · '+esc(s.hours)+' ชม.':''}</span>`:''}
-          <span class="block text-xs text-slate-400 mt-0.5">${s.plans.length} สื่อ</span></span>
-        <span class="text-brand-400 text-xl">›</span>
-      </button>
-      <div id="${pid}" class="px-5 pb-4 space-y-2">`;
-    if(!s.plans.length){ html += `<p class="text-sm text-slate-400">ยังไม่มีสื่อในวิชานี้</p>`; }
-    s.plans.forEach(p=>{
-      html += `<div class="flex items-center justify-between bg-brand-50/50 rounded-lg px-3 py-2">
-        <span class="text-sm">${p.planNo?`<b class="text-brand-700">แผน ${esc(p.planNo)}</b> · `:''}${esc(p.name)}</span>
-        ${p.link?`<a href="${esc(p.link)}" target="_blank" class="bg-brand-600 hover:bg-brand-700 text-white text-xs px-3 py-1.5 rounded-lg whitespace-nowrap">เปิดสื่อ →</a>`
-                :`<span class="text-xs text-slate-400">ยังไม่มีลิงก์</span>`}
-      </div>`;
-    });
-    html += `</div></div>`;
-  });
-  box.innerHTML = html;
+  renderCustomerGrid();
 }
+
+/* ภาพปก (หรือ placeholder ไล่สี + ตัวอักษรแรก) */
+function coverHtml_(s, big){
+  const h = big ? 'h-44' : 'h-28';
+  if(s.cover) return `<img src="${esc(s.cover)}" class="w-full ${h} object-cover" loading="lazy">`;
+  const init = esc(String(s.name||'📚').trim().charAt(0)) || '📚';
+  return `<div class="w-full ${h} flex items-center justify-center bg-gradient-to-br from-brand-300 to-brand-500 text-white text-4xl font-display">${init}</div>`;
+}
+
+function renderCustomerGrid(){
+  const d = MY_DATA;
+  let html = `<div class="flex items-center justify-between mb-4">
+      <p class="text-sm text-slate-600">สวัสดี 👋 <b>${esc(d.email)}</b><span class="block text-xs text-slate-400">วิชาของคุณ ${d.subjects.length} วิชา</span></p>
+      <button onclick="logoutCustomer()" class="text-xs text-slate-400 hover:text-brand-600 underline">ออกจากระบบ</button>
+    </div>
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">`;
+  d.subjects.forEach((s,i)=>{
+    html += `<button onclick="openSubjectDetail(${i})" class="card rounded-2xl overflow-hidden text-left hover:shadow-lg transition">
+      ${coverHtml_(s,false)}
+      <div class="p-3">
+        <div class="font-semibold text-brand-800 text-sm leading-snug">${esc(s.name)}</div>
+        <div class="text-xs text-slate-400 mt-1">${esc(s.level||'')}${s.hours?' · '+esc(s.hours)+' ชม.':''}</div>
+        <div class="text-xs text-brand-600 mt-1">🎬 ${s.plans.length} สื่อ</div>
+      </div>
+    </button>`;
+  });
+  html += `</div>`;
+  $('contentBox').innerHTML = html;
+  window.scrollTo(0,0);
+}
+
+function openSubjectDetail(i){
+  const s = MY_DATA.subjects[i];
+  let html = `<button onclick="renderCustomerGrid()" class="text-sm text-brand-600 hover:text-brand-700 mb-3">← กลับหน้าวิชาของฉัน</button>
+    <div class="card rounded-2xl overflow-hidden">
+      ${coverHtml_(s,true)}
+      <div class="p-4">
+        <h2 class="text-lg font-bold text-brand-800">${esc(s.name)}</h2>
+        <div class="text-sm text-slate-500">${esc(s.level||'')}${s.hours?' · '+esc(s.hours)+' ชม.':''} · ${s.plans.length} สื่อ</div>
+        <div class="mt-4 space-y-2">`;
+  if(!s.plans.length) html += `<p class="text-sm text-slate-400">ยังไม่มีสื่อในวิชานี้</p>`;
+  s.plans.forEach(p=>{
+    html += `<div class="flex items-center justify-between bg-brand-50/50 rounded-lg px-3 py-2.5">
+      <span class="text-sm">${p.planNo?`<b class="text-brand-700">แผน ${esc(p.planNo)}</b> · `:''}${esc(p.name)}</span>
+      ${p.link?`<a href="${esc(p.link)}" target="_blank" rel="noopener" class="bg-brand-600 hover:bg-brand-700 text-white text-xs px-3 py-1.5 rounded-lg whitespace-nowrap">เปิดสื่อ →</a>`
+              :`<span class="text-xs text-slate-400">ยังไม่มีลิงก์</span>`}
+    </div>`;
+  });
+  html += `</div></div></div>`;
+  $('contentBox').innerHTML = html;
+  window.scrollTo(0,0);
+}
+
 function logoutCustomer(){
+  clearEmail_();
+  MY_DATA = null;
   $('contentBox').classList.add('hidden'); $('contentBox').innerHTML='';
   $('loginBox').classList.remove('hidden'); $('custEmail').value='';
 }
@@ -609,12 +647,13 @@ function renderSubjects(){
   const list = SUBJECTS_CACHE.filter(s=>(s.name+s.level).toLowerCase().includes(q));
   $('subjectList').innerHTML = list.length ? list.map(s=>`
     <div class="border border-brand-100 rounded-xl p-4">
-      <div class="flex items-start justify-between">
-        <div>
-          <div class="font-semibold text-brand-800">${esc(s.name)}</div>
+      <div class="flex items-start gap-3">
+        ${s.cover?`<img src="${esc(s.cover)}" class="h-12 w-12 rounded-lg object-cover border border-brand-100 flex-shrink-0">`:`<div class="h-12 w-12 rounded-lg bg-brand-100 flex items-center justify-center flex-shrink-0 text-lg">📚</div>`}
+        <div class="flex-1 min-w-0">
+          <div class="font-semibold text-brand-800 leading-snug">${esc(s.name)}</div>
           <div class="text-xs text-slate-400">${esc(s.level||'-')}${s.hours?' · '+esc(s.hours)+' ชม.':''}</div>
         </div>
-        <span class="text-[10px] px-2 py-0.5 rounded-full ${s.status==='ปิด'?'bg-slate-100 text-slate-500':'bg-green-50 text-green-600'}">${esc(s.status||'เปิด')}</span>
+        <span class="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 ${s.status==='ปิด'?'bg-slate-100 text-slate-500':'bg-green-50 text-green-600'}">${esc(s.status||'เปิด')}</span>
       </div>
       <div class="flex gap-3 text-xs text-slate-500 mt-2">
         <span>🎬 ${s.planCount} สื่อ</span><span>🔑 ${s.accessCount} สิทธิ์</span>
@@ -637,6 +676,12 @@ async function addSubject(){
 function editSubject(s){
   $('editTitle').textContent='แก้ไขวิชา';
   $('editBody').innerHTML = `
+    <div class="flex items-center gap-3">
+      <img id="e_coverPreview" src="${esc(s.cover||'')}" class="${s.cover?'':'hidden'} h-16 w-16 rounded-lg object-cover border border-brand-100">
+      <button type="button" onclick="$('e_coverFile').click()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm px-3 py-2 rounded-lg">🖼️ อัปโหลดภาพปก</button>
+      <input id="e_coverFile" type="file" accept="image/*" class="hidden" onchange="handleSubjectCover(this)">
+      <input id="e_cover" type="hidden" value="${esc(s.cover||'')}">
+    </div>
     <input id="e_name"  value="${esc(s.name)}"  placeholder="ชื่อวิชา" class="w-full border border-slate-200 rounded-lg px-3 py-2">
     <input id="e_level" value="${esc(s.level||'')}" placeholder="ระดับชั้น" class="w-full border border-slate-200 rounded-lg px-3 py-2">
     <input id="e_hours" value="${esc(s.hours||'')}" placeholder="เวลาเรียน (ชั่วโมง)" class="w-full border border-slate-200 rounded-lg px-3 py-2">
@@ -647,11 +692,22 @@ function editSubject(s){
   $('editSaveBtn').onclick = async ()=>{
     showLoading('กำลังบันทึก...');
     try{
-      const res = await gas('updateSubject', ADMIN_PIN, s.id, {name:$('e_name').value.trim(), level:$('e_level').value.trim(), hours:$('e_hours').value.trim(), desc:$('e_desc').value.trim(), status:$('e_status').value});
+      const res = await gas('updateSubject', ADMIN_PIN, s.id, {name:$('e_name').value.trim(), level:$('e_level').value.trim(), hours:$('e_hours').value.trim(), desc:$('e_desc').value.trim(), status:$('e_status').value, cover:$('e_cover').value.trim()});
       if(res.ok){ toast('บันทึกแล้ว'); closeModal('m-edit'); SUBJECTS_CACHE=[]; loadSubjects(); } else toast(res.error,'error');
     }catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
   };
   openModal('m-edit');
+}
+async function handleSubjectCover(input){
+  const file = input.files[0]; if(!file) return;
+  showLoading('กำลังย่อรูปและอัปโหลดภาพปก...');
+  try{
+    const dataUrl = await compressImage(file, 800);
+    const res = await gas('uploadImageToDrive', ADMIN_PIN, dataUrl, 'cover_'+Date.now()+'.jpg');
+    if(res.ok){ $('e_cover').value=res.data; $('e_coverPreview').src=res.data; $('e_coverPreview').classList.remove('hidden'); toast('อัปโหลดภาพปกแล้ว — กดบันทึกเพื่อยืนยัน'); }
+    else toast(res.error,'error');
+  }catch(e){ toast('อัปโหลดไม่สำเร็จ: '+(e.message||e),'error'); }
+  finally{ hideLoading(); input.value=''; }
 }
 async function delSubject(id,name){
   if(!confirm('ลบวิชา "'+name+'" ?\n(สื่อและสิทธิ์ของวิชานี้จะถูกลบด้วย)')) return;
@@ -975,7 +1031,11 @@ async function disableAutoSync(){
 }
 
 /* ===================== Init ===================== */
-window.addEventListener('DOMContentLoaded', checkConnection);
+window.addEventListener('DOMContentLoaded', async ()=>{
+  await checkConnection();
+  const saved = getEmail_();
+  if(saved){ $('custEmail').value = saved; customerLogin(); }
+});
 </script>
 </body>
 </html>
