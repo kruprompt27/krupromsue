@@ -185,8 +185,10 @@ tailwind.config = {
     <section id="tab-plans" class="tab-panel hidden">
       <div class="card rounded-2xl p-5 mb-5">
         <div class="flex flex-wrap items-center gap-3 mb-4">
-          <label class="text-sm text-slate-600">เลือกวิชา:</label>
-          <select id="planSubject" onchange="renderPlans()" class="border border-slate-200 rounded-lg px-3 py-2 min-w-[220px]"></select>
+          <label class="text-sm text-slate-600">ชั้น:</label>
+          <select id="planLevel" onchange="renderPlanSubjectSelect()" class="border border-slate-200 rounded-lg px-3 py-2"></select>
+          <label class="text-sm text-slate-600">วิชา:</label>
+          <select id="planSubject" onchange="renderPlans()" class="border border-slate-200 rounded-lg px-3 py-2 min-w-[240px]"></select>
           <div class="flex gap-2 ml-auto">
             <button onclick="downloadPlanTemplate()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm px-3 py-2 rounded-lg">📥 ฟอร์มตัวอย่าง</button>
             <button onclick="$('planXlsx').click()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-2 rounded-lg">📤 นำเข้า .xlsx/.csv</button>
@@ -218,8 +220,10 @@ tailwind.config = {
     <section id="tab-access" class="tab-panel hidden">
       <div class="card rounded-2xl p-5 mb-5">
         <div class="flex flex-wrap items-center gap-3 mb-4">
-          <label class="text-sm text-slate-600">เลือกวิชา:</label>
-          <select id="accSubject" onchange="renderAccess()" class="border border-slate-200 rounded-lg px-3 py-2 min-w-[220px]"></select>
+          <label class="text-sm text-slate-600">ชั้น:</label>
+          <select id="accLevel" onchange="renderAccessSubjectSelect()" class="border border-slate-200 rounded-lg px-3 py-2"></select>
+          <label class="text-sm text-slate-600">วิชา:</label>
+          <select id="accSubject" onchange="renderAccess()" class="border border-slate-200 rounded-lg px-3 py-2 min-w-[240px]"></select>
           <button onclick="importCatalog()" class="ml-auto bg-brand-50 hover:bg-brand-100 text-brand-700 text-sm px-3 py-2 rounded-lg">📚 นำเข้าวิชาจากระบบขาย</button>
           <button onclick="openSyncModal()" class="bg-amber2-500 hover:bg-amber2-600 text-white text-sm px-3 py-2 rounded-lg">🔄 ซิงค์สิทธิ์จากคำสั่งซื้อ</button>
         </div>
@@ -581,8 +585,8 @@ function switchTab(name){
   $('tab-'+name).classList.remove('hidden');
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
   if(name==='subjects') loadSubjects();
-  if(name==='plans')   loadSubjectsThen(renderPlanSubjectSelect);
-  if(name==='access')  loadSubjectsThen(renderAccessSubjectSelect);
+  if(name==='plans')   loadSubjectsThen(renderPlanLevelSelect);
+  if(name==='access')  loadSubjectsThen(renderAccessLevelSelect);
   if(name==='report'  && typeof loadReport==='function')   loadReport();
   if(name==='settings'&& typeof loadSettings==='function') loadSettings();
 }
@@ -658,8 +662,28 @@ async function delSubject(id,name){
 }
 
 /* ===================== สื่อ (Plans) ===================== */
-function subjectOptions(){ return SUBJECTS_CACHE.map(s=>`<option value="${s.id}">${esc(s.name)}${s.level?' ('+esc(s.level)+')':''}</option>`).join(''); }
-function renderPlanSubjectSelect(){ const sel=$('planSubject'); const cur=sel.value; sel.innerHTML=subjectOptions(); if(cur)sel.value=cur; renderPlans(); }
+function levelKey(lv){
+  const m=String(lv||'').match(/(อ|ป|ม)\.?\s*(\d+)/);
+  const pref={'อ':0,'ป':1,'ม':2};
+  return m ? ((pref[m[1]]!=null?pref[m[1]]:9)*100 + parseInt(m[2],10)) : 999;
+}
+function levelOptions(){
+  const lv=[...new Set(SUBJECTS_CACHE.map(s=>String(s.level||'')).filter(x=>x))].sort((a,b)=>levelKey(a)-levelKey(b));
+  return '<option value="">ทุกชั้น</option>'+lv.map(l=>`<option value="${esc(l)}">${esc(l)}</option>`).join('');
+}
+function subjectOptionsFor(level){
+  let list=SUBJECTS_CACHE.slice();
+  if(level) list=list.filter(s=>String(s.level)===String(level));
+  list.sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'th')||(Number(a.hours)||0)-(Number(b.hours)||0));
+  return list.map(s=>`<option value="${s.id}">${esc(s.name)}${s.level?' ('+esc(s.level)+')':''}${s.hours?' · '+esc(s.hours)+' ชม.':''}</option>`).join('');
+}
+function renderPlanLevelSelect(){ $('planLevel').innerHTML=levelOptions(); renderPlanSubjectSelect(); }
+function renderPlanSubjectSelect(){
+  const sel=$('planSubject'); const cur=sel.value;
+  sel.innerHTML=subjectOptionsFor($('planLevel').value);
+  if(cur && [...sel.options].some(o=>o.value===cur)) sel.value=cur;
+  renderPlans();
+}
 async function renderPlans(){
   const sid = $('planSubject').value; if(!sid){ $('planList').innerHTML=`<tr><td colspan="4" class="py-4 text-center text-slate-400">— กรุณาเพิ่ม/เลือกวิชา —</td></tr>`; return; }
   showLoading('กำลังโหลดสื่อ...');
@@ -731,7 +755,13 @@ function importPlans(input){
 }
 
 /* ===================== สิทธิ์ (Access) ===================== */
-function renderAccessSubjectSelect(){ const sel=$('accSubject'); const cur=sel.value; sel.innerHTML=subjectOptions(); if(cur)sel.value=cur; renderAccess(); }
+function renderAccessLevelSelect(){ $('accLevel').innerHTML=levelOptions(); renderAccessSubjectSelect(); }
+function renderAccessSubjectSelect(){
+  const sel=$('accSubject'); const cur=sel.value;
+  sel.innerHTML=subjectOptionsFor($('accLevel').value);
+  if(cur && [...sel.options].some(o=>o.value===cur)) sel.value=cur;
+  renderAccess();
+}
 async function renderAccess(){
   const sid=$('accSubject').value; if(!sid){ $('accessList').innerHTML=`<tr><td colspan="5" class="py-4 text-center text-slate-400">— เลือกวิชา —</td></tr>`; return; }
   showLoading('กำลังโหลด...');
@@ -773,7 +803,7 @@ async function importCatalog(){
   showLoading('กำลังนำเข้าวิชา...');
   try{
     const res = await gas('importSubjectsFromOrderCatalog', ADMIN_PIN);
-    if(res.ok){ toast('เพิ่มวิชาใหม่ '+res.data.added+' รายการ'); SUBJECTS_CACHE=[]; renderAccessSubjectSelect(); }
+    if(res.ok){ toast('เพิ่มวิชาใหม่ '+res.data.added+' รายการ'); SUBJECTS_CACHE=[]; loadSubjectsThen(renderAccessLevelSelect); }
     else toast(res.error,'error');
   }catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
 }
