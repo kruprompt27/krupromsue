@@ -304,6 +304,23 @@ tailwind.config = {
           <p class="text-xs text-slate-400 mt-3">เก็บ PIN ไว้เป็นความลับ ผู้ที่ทราบ PIN จะจัดการข้อมูลทั้งหมดได้</p>
         </div>
       </div>
+
+      <div class="card rounded-2xl p-5 mt-5">
+        <h3 class="font-semibold text-brand-800 mb-3">🔄 ซิงค์สิทธิ์อัตโนมัติจากระบบขาย</h3>
+        <div id="autoSyncStatus" class="text-sm bg-slate-50 rounded-lg p-3 mb-3">กำลังตรวจสอบสถานะ...</div>
+        <div class="flex flex-wrap items-center gap-3">
+          <label class="text-sm text-slate-600">ความถี่:</label>
+          <select id="autoSyncMinutes" class="border border-slate-200 rounded-lg px-3 py-2">
+            <option value="5">ทุก 5 นาที</option>
+            <option value="10" selected>ทุก 10 นาที</option>
+            <option value="15">ทุก 15 นาที</option>
+            <option value="30">ทุก 30 นาที</option>
+          </select>
+          <button onclick="enableAutoSync()" class="bg-brand-600 hover:bg-brand-700 text-white rounded-lg px-4 py-2 font-medium">เปิด / อัปเดต</button>
+          <button onclick="disableAutoSync()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg px-4 py-2">ปิด</button>
+        </div>
+        <p class="text-xs text-slate-400 mt-3">แต่ละรอบระบบจะ <b>นำเข้าวิชาใหม่จากระบบขาย</b> แล้วดึงคำสั่งซื้อสถานะ "ส่งแผนเสร็จสิ้น" มาให้สิทธิ์อัตโนมัติตามความถี่ที่ตั้ง (กันซ้ำให้ทั้งวิชาและสิทธิ์)</p>
+      </div>
     </section>
 
     <!-- ===== TAB: คู่มือ ===== -->
@@ -438,6 +455,7 @@ const ARG_MAP = {
   getAccess:['pin','subjectId'], addAccess:['pin','subjectId','emails','expire'], updateAccess:['pin','id','data'], deleteAccess:['pin','id'],
   syncFromOrders:['pin','dryRun'], getReportData:['pin'],
   importSubjectsFromOrderCatalog:['pin'],
+  enableAutoSync:['pin','minutes'], disableAutoSync:['pin'], getAutoSyncStatus:['pin'],
   backupAllData:['pin'], importBackupData:['pin','json'], clearAllData:['pin','confirmText'],
   uploadImageToDrive:['pin','base64','filename'], saveSettings:['pin','data']
 };
@@ -834,6 +852,7 @@ async function loadSettings(){
       $('setLogoURL').value  = d.logoURL || '';
       if(d.logoURL){ $('logoPreview').src = d.logoURL; $('logoPreview').classList.remove('hidden'); }
     }
+    refreshAutoSync();
   }catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
 }
 async function saveSiteSettings(){
@@ -889,6 +908,35 @@ async function handleLogo(input){
     } else toast(res.error,'error');
   }catch(e){ toast('อัปโหลดไม่สำเร็จ: '+(e.message||e),'error'); }
   finally{ hideLoading(); input.value=''; }
+}
+
+/* ===================== ซิงค์อัตโนมัติ ===================== */
+async function refreshAutoSync(){
+  try{
+    const res = await gas('getAutoSyncStatus', ADMIN_PIN);
+    if(res.ok){
+      const d = res.data;
+      $('autoSyncStatus').innerHTML = d.enabled
+        ? `<span class="text-green-600 font-medium">🟢 เปิดอยู่</span> · ทุก ${esc(d.minutes)} นาที`
+          + (d.lastRun?`<br><span class="text-xs text-slate-500">รันล่าสุด: ${esc(d.lastRun)} · ผลล่าสุด: ${esc(String(d.lastAdded))}</span>`:'')
+        : `<span class="text-slate-500">⚪ ปิดอยู่</span>`;
+      if(d.minutes) $('autoSyncMinutes').value = d.minutes;
+    }
+  }catch(e){}
+}
+async function enableAutoSync(){
+  showLoading('กำลังตั้งค่าซิงค์อัตโนมัติ...');
+  try{
+    const res = await gas('enableAutoSync', ADMIN_PIN, $('autoSyncMinutes').value);
+    if(res.ok){ toast('เปิดซิงค์อัตโนมัติ ทุก '+res.data.minutes+' นาที'); refreshAutoSync(); } else toast(res.error,'error');
+  }catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
+}
+async function disableAutoSync(){
+  showLoading('กำลังปิด...');
+  try{
+    const res = await gas('disableAutoSync', ADMIN_PIN);
+    if(res.ok){ toast('ปิดซิงค์อัตโนมัติแล้ว'); refreshAutoSync(); } else toast(res.error,'error');
+  }catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
 }
 
 /* ===================== Init ===================== */
