@@ -219,7 +219,8 @@ tailwind.config = {
         <div class="flex flex-wrap items-center gap-3 mb-4">
           <label class="text-sm text-slate-600">เลือกวิชา:</label>
           <select id="accSubject" onchange="renderAccess()" class="border border-slate-200 rounded-lg px-3 py-2 min-w-[220px]"></select>
-          <button onclick="openSyncModal()" class="ml-auto bg-amber2-500 hover:bg-amber2-600 text-white text-sm px-3 py-2 rounded-lg">🔄 ซิงค์จากคำสั่งซื้อ</button>
+          <button onclick="importCatalog()" class="ml-auto bg-brand-50 hover:bg-brand-100 text-brand-700 text-sm px-3 py-2 rounded-lg">📚 นำเข้าวิชาจากระบบขาย</button>
+          <button onclick="openSyncModal()" class="bg-amber2-500 hover:bg-amber2-600 text-white text-sm px-3 py-2 rounded-lg">🔄 ซิงค์สิทธิ์จากคำสั่งซื้อ</button>
         </div>
         <h3 class="font-semibold text-brand-800 mb-2">➕ ให้สิทธิ์ด้วย Gmail</h3>
         <p class="text-xs text-slate-500 mb-2">ใส่หลายอีเมลได้ คั่นด้วยเครื่องหมายจุลภาค เว้นวรรค หรือขึ้นบรรทัดใหม่</p>
@@ -436,6 +437,7 @@ const ARG_MAP = {
   bulkImportPlans:['pin','subjectId','rows'],
   getAccess:['pin','subjectId'], addAccess:['pin','subjectId','emails','expire'], updateAccess:['pin','id','data'], deleteAccess:['pin','id'],
   syncFromOrders:['pin','dryRun'], getReportData:['pin'],
+  importSubjectsFromOrderCatalog:['pin'],
   backupAllData:['pin'], importBackupData:['pin','json'], clearAllData:['pin','confirmText'],
   uploadImageToDrive:['pin','base64','filename'], saveSettings:['pin','data']
 };
@@ -743,6 +745,15 @@ async function delAccess(id){
 }
 
 /* ===================== ซิงค์จากคำสั่งซื้อ ===================== */
+async function importCatalog(){
+  if(!confirm('นำเข้ารายชื่อวิชาทั้งหมดจากแท็บแคตตาล็อกในระบบขาย? (กันซ้ำให้อัตโนมัติ)')) return;
+  showLoading('กำลังนำเข้าวิชา...');
+  try{
+    const res = await gas('importSubjectsFromOrderCatalog', ADMIN_PIN);
+    if(res.ok){ toast('เพิ่มวิชาใหม่ '+res.data.added+' รายการ'); SUBJECTS_CACHE=[]; renderAccessSubjectSelect(); }
+    else toast(res.error,'error');
+  }catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
+}
 function openSyncModal(){ $('syncResult').classList.add('hidden'); openModal('m-sync'); }
 async function runSync(dry){
   showLoading(dry?'กำลังพรีวิว...':'กำลังเพิ่มสิทธิ์...');
@@ -750,9 +761,9 @@ async function runSync(dry){
     const res=await gas('syncFromOrders', ADMIN_PIN, dry);
     const box=$('syncResult'); box.classList.remove('hidden');
     if(!res.ok){ box.innerHTML=`<span class="text-red-600">${esc(res.error)}</span>`; return; }
-    const um=res.data.unmappedProducts||{}; const umKeys=Object.keys(um);
+    const um=res.data.unmatchedProducts||{}; const umKeys=Object.keys(um);
     box.innerHTML = `<div class="text-brand-700 font-medium">${dry?'พรีวิว: จะเพิ่ม':'เพิ่มแล้ว'} ${res.data.added} สิทธิ์</div>`
-      + (umKeys.length?`<div class="text-amber2-600 mt-2 text-xs">⚠️ สินค้าที่ยังไม่ได้จับคู่ใน CONFIG.PRODUCT_TO_SUBJECT:<br>${umKeys.map(k=>esc(k)+' ('+um[k]+')').join('<br>')}</div>`:'');
+      + (umKeys.length?`<div class="text-amber2-600 mt-2 text-xs">⚠️ รายการที่จับคู่วิชาไม่ได้ (ยังไม่มีวิชานี้ในระบบ หรือชื่อไม่ตรง):<br>${umKeys.slice(0,20).map(k=>esc(k)+' ('+um[k]+')').join('<br>')}${umKeys.length>20?'<br>...':''}</div>`:'');
     if(!dry){ SUBJECTS_CACHE=[]; renderAccess(); }
   }catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
 }
