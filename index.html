@@ -501,6 +501,7 @@ function getEmail_(){ try{ return localStorage.getItem('kps_email')||''; }catch(
 function clearEmail_(){ try{ localStorage.removeItem('kps_email'); }catch(_){ } }
 
 let MY_DATA = null;
+let CUST_LEVEL = '';
 
 async function customerLogin(){
   const email = $('custEmail').value.trim();
@@ -517,6 +518,7 @@ async function customerLogin(){
 
 function renderCustomerContent(d){
   MY_DATA = d;
+  CUST_LEVEL = '';
   $('loginBox').classList.add('hidden');
   const box = $('contentBox'); box.classList.remove('hidden'); box.classList.add('fade-up');
   if(!d.subjects.length){
@@ -542,12 +544,21 @@ function coverHtml_(s, big){
 
 function renderCustomerGrid(){
   const d = MY_DATA;
-  let html = `<div class="flex items-center justify-between mb-4">
-      <p class="text-sm text-slate-600">สวัสดี 👋 <b>${esc(d.email)}</b><span class="block text-xs text-slate-400">วิชาของคุณ ${d.subjects.length} วิชา</span></p>
+  const levels = [...new Set(d.subjects.map(s=>String(s.level||'')).filter(x=>x))].sort((a,b)=>levelKey(a)-levelKey(b));
+  const count = d.subjects.filter(s=>!CUST_LEVEL || String(s.level)===CUST_LEVEL).length;
+  let html = `<div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
+      <p class="text-sm text-slate-600">สวัสดี 👋 <b>${esc(d.email)}</b><span class="block text-xs text-slate-400">วิชาของคุณ ${d.subjects.length} วิชา${CUST_LEVEL?` · แสดง ${count} วิชา`:''}</span></p>
       <button onclick="logoutCustomer()" class="text-xs text-slate-400 hover:text-brand-600 underline">ออกจากระบบ</button>
-    </div>
-    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">`;
+    </div>`;
+  if(levels.length>1){
+    html += `<div class="flex items-center gap-2 mb-4 overflow-x-auto pb-1">
+      <button onclick="setCustLevel('')" class="text-xs px-3 py-1.5 rounded-full whitespace-nowrap ${CUST_LEVEL===''?'bg-brand-600 text-white':'bg-brand-50 text-brand-700'}">ทุกชั้น</button>
+      ${levels.map(l=>`<button onclick="setCustLevel('${esc(l)}')" class="text-xs px-3 py-1.5 rounded-full whitespace-nowrap ${CUST_LEVEL===l?'bg-brand-600 text-white':'bg-brand-50 text-brand-700'}">${esc(l)}</button>`).join('')}
+    </div>`;
+  }
+  html += `<div class="grid grid-cols-2 sm:grid-cols-3 gap-3">`;
   d.subjects.forEach((s,i)=>{
+    if(CUST_LEVEL && String(s.level)!==CUST_LEVEL) return;
     html += `<button onclick="openSubjectDetail(${i})" class="card rounded-2xl overflow-hidden text-left hover:shadow-lg transition">
       ${coverHtml_(s,false)}
       <div class="p-3">
@@ -561,6 +572,7 @@ function renderCustomerGrid(){
   $('contentBox').innerHTML = html;
   window.scrollTo(0,0);
 }
+function setCustLevel(l){ CUST_LEVEL = l; renderCustomerGrid(); }
 
 function openSubjectDetail(i){
   const s = MY_DATA.subjects[i];
