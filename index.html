@@ -510,7 +510,7 @@ async function customerLogin(){
   try{
     const res = await gas('getMyContent', email);
     if(!res.ok){ toast(res.error,'error'); return; }
-    if(res.data.subjects.length) saveEmail_(res.data.email);  // จำเฉพาะอีเมลที่มีสิทธิ์
+    saveEmail_(res.data.email || email);  // จำอีเมลที่ใช้ login เสมอ จนกว่าจะกดออกจากระบบ
     renderCustomerContent(res.data);
   }catch(e){ toast('เกิดข้อผิดพลาด: '+e.message,'error'); }
   finally{ hideLoading(); }
