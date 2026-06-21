@@ -164,8 +164,11 @@ tailwind.config = {
     <section id="tab-subjects" class="tab-panel">
       <div class="card rounded-2xl p-5 mb-5">
         <h3 class="font-semibold text-brand-800 mb-3">➕ เพิ่มวิชาใหม่</h3>
-        <div class="grid sm:grid-cols-5 gap-3">
+        <div class="grid sm:grid-cols-6 gap-3">
           <input id="sjName"  placeholder="ชื่อวิชา *"  class="border border-slate-200 rounded-lg px-3 py-2 sm:col-span-2">
+          <select id="sjCurriculum" class="border border-slate-200 rounded-lg px-3 py-2">
+            <option value="">หลักสูตร</option><option value="68">68</option><option value="51">51</option>
+          </select>
           <input id="sjLevel" placeholder="ระดับชั้น เช่น ป.1" class="border border-slate-200 rounded-lg px-3 py-2">
           <input id="sjHours" placeholder="ชั่วโมง เช่น 160" class="border border-slate-200 rounded-lg px-3 py-2">
           <button onclick="addSubject()" class="bg-brand-600 hover:bg-brand-700 text-white rounded-lg px-4 py-2 font-medium">เพิ่มวิชา</button>
@@ -563,7 +566,7 @@ function renderCustomerGrid(){
       ${coverHtml_(s,false)}
       <div class="p-3">
         <div class="font-semibold text-brand-800 text-sm leading-snug">${esc(s.name)}</div>
-        <div class="text-xs text-slate-400 mt-1">${esc(s.level||'')}${s.hours?' · '+esc(s.hours)+' ชม.':''}</div>
+        <div class="text-xs text-slate-400 mt-1">${esc(s.level||'')}${s.hours?' · '+esc(s.hours)+' ชม.':''}${s.curriculum?' · หลักสูตร '+esc(s.curriculum):''}</div>
         <div class="text-xs text-brand-600 mt-1">🎬 ${s.plans.length} สื่อ</div>
       </div>
     </button>`;
@@ -581,7 +584,7 @@ function openSubjectDetail(i){
       ${coverHtml_(s,true)}
       <div class="p-4">
         <h2 class="text-lg font-bold text-brand-800">${esc(s.name)}</h2>
-        <div class="text-sm text-slate-500">${esc(s.level||'')}${s.hours?' · '+esc(s.hours)+' ชม.':''} · ${s.plans.length} สื่อ</div>
+        <div class="text-sm text-slate-500">${esc(s.level||'')}${s.hours?' · '+esc(s.hours)+' ชม.':''}${s.curriculum?' · หลักสูตร '+esc(s.curriculum):''} · ${s.plans.length} สื่อ</div>
         <div class="mt-4 space-y-2">`;
   if(!s.plans.length) html += `<p class="text-sm text-slate-400">ยังไม่มีสื่อในวิชานี้</p>`;
   s.plans.forEach(p=>{
@@ -657,13 +660,13 @@ async function loadSubjectsThen(cb){
 }
 function renderSubjects(){
   const q = ($('sjSearch').value||'').toLowerCase();
-  const list = SUBJECTS_CACHE.filter(s=>(s.name+s.level).toLowerCase().includes(q));
+  const list = SUBJECTS_CACHE.filter(s=>(s.name+s.level+(s.curriculum||'')).toLowerCase().includes(q));
   $('subjectList').innerHTML = list.length ? list.map(s=>`
     <div class="border border-brand-100 rounded-xl p-4">
       <div class="flex items-start gap-3">
         ${s.cover?`<img src="${esc(s.cover)}" class="h-12 w-12 rounded-lg object-cover border border-brand-100 flex-shrink-0">`:`<div class="h-12 w-12 rounded-lg bg-brand-100 flex items-center justify-center flex-shrink-0 text-lg">📚</div>`}
         <div class="flex-1 min-w-0">
-          <div class="font-semibold text-brand-800 leading-snug">${esc(s.name)}</div>
+          <div class="font-semibold text-brand-800 leading-snug">${esc(s.name)}${s.curriculum?` <span class="text-[10px] align-middle px-1.5 py-0.5 rounded bg-brand-50 text-brand-600">หลักสูตร ${esc(s.curriculum)}</span>`:''}</div>
           <div class="text-xs text-slate-400">${esc(s.level||'-')}${s.hours?' · '+esc(s.hours)+' ชม.':''}</div>
         </div>
         <span class="text-[10px] px-2 py-0.5 rounded-full flex-shrink-0 ${s.status==='ปิด'?'bg-slate-100 text-slate-500':'bg-green-50 text-green-600'}">${esc(s.status||'เปิด')}</span>
@@ -681,8 +684,8 @@ async function addSubject(){
   const name=$('sjName').value.trim(); if(!name){ toast('กรอกชื่อวิชา','warn'); return; }
   showLoading('กำลังบันทึก...');
   try{
-    const res = await gas('addSubject', ADMIN_PIN, {name, level:$('sjLevel').value.trim(), hours:$('sjHours').value.trim(), desc:$('sjDesc').value.trim()});
-    if(res.ok){ toast('เพิ่มวิชาแล้ว'); $('sjName').value=$('sjLevel').value=$('sjHours').value=$('sjDesc').value=''; SUBJECTS_CACHE=[]; loadSubjects(); }
+    const res = await gas('addSubject', ADMIN_PIN, {name, curriculum:$('sjCurriculum').value, level:$('sjLevel').value.trim(), hours:$('sjHours').value.trim(), desc:$('sjDesc')?$('sjDesc').value.trim():''});
+    if(res.ok){ toast('เพิ่มวิชาแล้ว'); $('sjName').value=$('sjLevel').value=$('sjHours').value=''; $('sjCurriculum').value=''; if($('sjDesc'))$('sjDesc').value=''; SUBJECTS_CACHE=[]; loadSubjects(); }
     else toast(res.error,'error');
   }catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
 }
@@ -696,6 +699,11 @@ function editSubject(s){
       <input id="e_cover" type="hidden" value="${esc(s.cover||'')}">
     </div>
     <input id="e_name"  value="${esc(s.name)}"  placeholder="ชื่อวิชา" class="w-full border border-slate-200 rounded-lg px-3 py-2">
+    <select id="e_curriculum" class="w-full border border-slate-200 rounded-lg px-3 py-2">
+      <option value="" ${!s.curriculum?'selected':''}>— เลือกหลักสูตร —</option>
+      <option value="68" ${String(s.curriculum)==='68'?'selected':''}>หลักสูตร 68</option>
+      <option value="51" ${String(s.curriculum)==='51'?'selected':''}>หลักสูตร 51</option>
+    </select>
     <input id="e_level" value="${esc(s.level||'')}" placeholder="ระดับชั้น" class="w-full border border-slate-200 rounded-lg px-3 py-2">
     <input id="e_hours" value="${esc(s.hours||'')}" placeholder="เวลาเรียน (ชั่วโมง)" class="w-full border border-slate-200 rounded-lg px-3 py-2">
     <input id="e_desc"  value="${esc(s.desc||'')}"  placeholder="คำอธิบาย" class="w-full border border-slate-200 rounded-lg px-3 py-2">
@@ -705,7 +713,7 @@ function editSubject(s){
   $('editSaveBtn').onclick = async ()=>{
     showLoading('กำลังบันทึก...');
     try{
-      const res = await gas('updateSubject', ADMIN_PIN, s.id, {name:$('e_name').value.trim(), level:$('e_level').value.trim(), hours:$('e_hours').value.trim(), desc:$('e_desc').value.trim(), status:$('e_status').value, cover:$('e_cover').value.trim()});
+      const res = await gas('updateSubject', ADMIN_PIN, s.id, {name:$('e_name').value.trim(), curriculum:$('e_curriculum').value, level:$('e_level').value.trim(), hours:$('e_hours').value.trim(), desc:$('e_desc').value.trim(), status:$('e_status').value, cover:$('e_cover').value.trim()});
       if(res.ok){ toast('บันทึกแล้ว'); closeModal('m-edit'); SUBJECTS_CACHE=[]; loadSubjects(); } else toast(res.error,'error');
     }catch(e){ toast(e.message,'error'); } finally{ hideLoading(); }
   };
